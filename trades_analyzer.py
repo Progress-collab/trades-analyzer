@@ -77,18 +77,22 @@ class TradesAnalyzer:
             desktop_path = userprofile
         
         # Используем найденные рабочие пути
-        kas_path = r"C:\Sandbox\glaze\Kas\user\current\OneDrive\Рабочий стол"
-        # Используем точный путь к рабочему столу через USERPROFILE
         desktop_real_path = os.path.join(os.environ.get('USERPROFILE', ''), "OneDrive", "Рабочий стол")
+        kas_path = r"C:\Sandbox\glaze\Kas\user\current\OneDrive\Рабочий стол"
+        literuslan_path = r"C:\Sandbox\glaze\LiteRuslan\user\current\OneDrive\Рабочий стол"
         
         sources = {
             1: {
-                "name": "Папка Kas (основной источник)",
-                "path": kas_path
+                "name": "Рабочий стол пользователя",
+                "path": desktop_real_path
             },
             2: {
-                "name": "Рабочий стол пользователя", 
-                "path": desktop_real_path
+                "name": "Папка Kas (Ваня)", 
+                "path": kas_path
+            },
+            3: {
+                "name": "Песочница LiteRuslan",
+                "path": literuslan_path
             }
         }
         
@@ -105,7 +109,7 @@ class TradesAnalyzer:
         
         while True:
             try:
-                choice = input("Выберите источник (1 или 2): ").strip()
+                choice = input("Выберите источник (1, 2 или 3): ").strip()
                 choice_num = int(choice)
                 
                 if choice_num in sources:
@@ -118,10 +122,10 @@ class TradesAnalyzer:
                         print(f"❌ Папка недоступна: {selected_source['path']}")
                         print("Попробуйте другой вариант.")
                 else:
-                    print("❌ Неверный выбор. Введите 1 или 2.")
+                    print("❌ Неверный выбор. Введите 1, 2 или 3.")
                     
             except ValueError:
-                print("❌ Введите число 1 или 2.")
+                print("❌ Введите число 1, 2 или 3.")
             except KeyboardInterrupt:
                 print("\n❌ Отменено пользователем.")
                 sys.exit(1)
@@ -160,7 +164,9 @@ class TradesAnalyzer:
             
             # Определяем метку источника
             source_tag = ""
-            if "Sandbox" in source_filepath and "Kas" in source_filepath:
+            if "Sandbox" in source_filepath and "LiteRuslan" in source_filepath:
+                source_tag = "_LiteRuslan"
+            elif "Sandbox" in source_filepath and "Kas" in source_filepath:
                 source_tag = "_Ваня"
             elif "OneDrive" in source_filepath and "Рабочий стол" in source_filepath:
                 source_tag = "_супруга_и_дочь"
