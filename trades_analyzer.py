@@ -117,7 +117,7 @@ class TradesAnalyzer:
     
     def calculate_averages(self, df: pd.DataFrame) -> Dict[str, Any]:
         """
-        Вычисляет средние значения по сделкам
+        Вычисляет средние и средневзвешенные значения по сделкам
         
         Args:
             df: DataFrame с данными о сделках
@@ -135,12 +135,39 @@ class TradesAnalyzer:
                 logger.warning("Не найдено численных столбцов для расчета средних")
                 return results
             
-            # Вычисляем средние для всех численных столбцов
+            # Вычисляем простые средние для всех численных столбцов
             for col in numeric_columns:
                 if not df[col].isna().all():  # Проверяем, что столбец не пустой
                     mean_value = df[col].mean()
                     results[f'avg_{col}'] = mean_value
-                    logger.info(f"Среднее значение {col}: {mean_value:.4f}")
+                    logger.info(f"Простое среднее {col}: {mean_value:.4f}")
+            
+            # Вычисляем средневзвешенные значения (VWAP)
+            if 'Price' in df.columns and 'Amount' in df.columns:
+                # Убираем строки с NaN значениями
+                clean_df = df[['Price', 'Amount']].dropna()
+                
+                if len(clean_df) > 0:
+                    # VWAP = Σ(Price × Amount) / Σ(Amount)
+                    total_volume = clean_df['Amount'].sum()
+                    if total_volume > 0:
+                        vwap = (clean_df['Price'] * clean_df['Amount']).sum() / total_volume
+                        results['vwap_price'] = vwap
+                        logger.info(f"VWAP (средневзвешенная цена): {vwap:.4f}")
+                        
+                        # Средний размер сделки взвешенный по цене
+                        total_price_weight = clean_df['Price'].sum()
+                        if total_price_weight > 0:
+                            weighted_avg_amount = (clean_df['Amount'] * clean_df['Price']).sum() / total_price_weight
+                            results['weighted_avg_amount'] = weighted_avg_amount
+                            logger.info(f"Средневзвешенный объем: {weighted_avg_amount:.4f}")
+                    
+                    # Дополнительная статистика
+                    results['total_volume'] = total_volume
+                    results['total_turnover'] = (clean_df['Price'] * clean_df['Amount']).sum()
+                    
+                    logger.info(f"Общий объем: {total_volume:.4f}")
+                    logger.info(f"Общий оборот: {results['total_turnover']:.2f}")
             
             # Общая статистика
             results['total_trades'] = len(df)
@@ -189,9 +216,9 @@ class TradesAnalyzer:
             print(f"❌ Ошибка: {results['error']}")
             return
         
-        print("\n" + "="*50)
+        print("\n" + "="*60)
         print("📊 АНАЛИЗ ТОРГОВЫХ СДЕЛОК")
-        print("="*50)
+        print("="*60)
         
         if 'source_file' in results:
             print(f"📁 Файл: {os.path.basename(results['source_file'])}")
@@ -199,18 +226,43 @@ class TradesAnalyzer:
         if 'total_trades' in results:
             print(f"📈 Всего сделок: {results['total_trades']}")
         
-        print("\n📊 СРЕДНИЕ ЗНАЧЕНИЯ:")
-        print("-" * 30)
+        # Общая статистика
+        if 'total_volume' in results:
+            print(f"📦 Общий объем: {results['total_volume']:.4f}")
+        
+        if 'total_turnover' in results:
+            print(f"💰 Общий оборот: {results['total_turnover']:,.2f} ₽")
+        
+        # Простые средние значения
+        print("\n📊 ПРОСТЫЕ СРЕДНИЕ ЗНАЧЕНИЯ:")
+        print("-" * 40)
         
         for key, value in results.items():
             if key.startswith('avg_'):
                 column_name = key[4:]  # Убираем префикс 'avg_'
-                print(f"{column_name}: {value:.4f}")
+                if column_name == 'Price':
+                    print(f"Средняя цена: {value:,.4f} ₽")
+                elif column_name == 'Amount':
+                    print(f"Средний объем: {value:.4f}")
+                else:
+                    print(f"{column_name}: {value:.4f}")
+        
+        # Средневзвешенные значения
+        has_weighted = any(key in results for key in ['vwap_price', 'weighted_avg_amount'])
+        if has_weighted:
+            print("\n⚖️  СРЕДНЕВЗВЕШЕННЫЕ ЗНАЧЕНИЯ:")
+            print("-" * 40)
+            
+            if 'vwap_price' in results:
+                print(f"VWAP (средневзвешенная цена): {results['vwap_price']:,.4f} ₽")
+            
+            if 'weighted_avg_amount' in results:
+                print(f"Средневзвешенный объем: {results['weighted_avg_amount']:.4f}")
         
         if 'analysis_date' in results:
             print(f"\n⏰ Дата анализа: {results['analysis_date']}")
         
-        print("="*50)
+        print("="*60)
 
 
 def main():
