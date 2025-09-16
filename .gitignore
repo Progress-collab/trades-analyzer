@@ -121,5 +121,6 @@ config.ini
 
 # Input files (keep folder but ignore contents)
 input/*.csv
+input/*.xlsx
 input/*.txt
 input/*.log

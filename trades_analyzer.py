@@ -8,6 +8,8 @@
 import pandas as pd
 import os
 import shutil
+import subprocess
+import sys
 from datetime import datetime
 from typing import Dict, Any, Optional
 import logging
@@ -88,6 +90,89 @@ class TradesAnalyzer:
         except Exception as e:
             logger.error(f"Ошибка при копировании файла: {e}")
             return source_filepath  # Возвращаем оригинальный путь если копирование не удалось
+    
+    def create_and_open_excel(self, df: pd.DataFrame, source_filepath: str) -> str:
+        """
+        Создает Excel файл из DataFrame и открывает его
+        
+        Args:
+            df: DataFrame с данными
+            source_filepath: Путь к исходному файлу для формирования имени
+            
+        Returns:
+            Путь к созданному Excel файлу
+        """
+        try:
+            # Формируем имя Excel файла
+            base_name = os.path.splitext(os.path.basename(source_filepath))[0]
+            excel_filename = f"{base_name}_analyzed.xlsx"
+            excel_path = os.path.join(self.input_directory, excel_filename)
+            
+            # Создаем Excel файл с несколькими листами
+            with pd.ExcelWriter(excel_path, engine='openpyxl') as writer:
+                # Основные данные
+                df.to_excel(writer, sheet_name='Данные', index=False)
+                
+                # Статистика по столбцам
+                stats_data = []
+                for col in df.columns:
+                    if col in ['Price', 'Amount']:
+                        numeric_col = pd.to_numeric(df[col], errors='coerce')
+                        stats_data.append({
+                            'Столбец': col,
+                            'Тип': str(df[col].dtype),
+                            'Всего значений': len(df[col]),
+                            'Пустых': df[col].isna().sum(),
+                            'Валидных числовых': numeric_col.notna().sum() if not numeric_col.empty else 0,
+                            'Минимум': numeric_col.min() if numeric_col.notna().any() else 'N/A',
+                            'Максимум': numeric_col.max() if numeric_col.notna().any() else 'N/A',
+                            'Среднее': numeric_col.mean() if numeric_col.notna().any() else 'N/A',
+                            'Сумма': numeric_col.sum() if numeric_col.notna().any() else 'N/A'
+                        })
+                    else:
+                        stats_data.append({
+                            'Столбец': col,
+                            'Тип': str(df[col].dtype),
+                            'Всего значений': len(df[col]),
+                            'Пустых': df[col].isna().sum(),
+                            'Уникальных': df[col].nunique(),
+                            'Примеры': ', '.join(map(str, df[col].dropna().head(3).tolist()))
+                        })
+                
+                stats_df = pd.DataFrame(stats_data)
+                stats_df.to_excel(writer, sheet_name='Статистика', index=False)
+                
+                # Валидные данные для VWAP
+                if 'Price' in df.columns and 'Amount' in df.columns:
+                    clean_df = df[['Ticker', 'Price', 'Direction', 'Amount', 'DateCreate']].dropna(subset=['Price', 'Amount'])
+                    if len(clean_df) > 0:
+                        clean_df.to_excel(writer, sheet_name='Валидные_для_VWAP', index=False)
+            
+            logger.info(f"Excel файл создан: {excel_filename}")
+            
+            # Открываем Excel файл
+            try:
+                if sys.platform == "win32":
+                    os.startfile(excel_path)
+                elif sys.platform == "darwin":  # macOS
+                    subprocess.run(["open", excel_path])
+                else:  # Linux
+                    subprocess.run(["xdg-open", excel_path])
+                
+                logger.info(f"Excel файл открыт: {excel_filename}")
+                
+                # Ждем немного, чтобы пользователь мог посмотреть на данные
+                input("\n⏸️  Excel файл открыт. Проверьте данные и нажмите Enter для продолжения анализа...")
+                
+            except Exception as e:
+                logger.warning(f"Не удалось автоматически открыть Excel файл: {e}")
+                logger.info(f"Вы можете открыть файл вручную: {excel_path}")
+                
+            return excel_path
+            
+        except Exception as e:
+            logger.error(f"Ошибка при создании Excel файла: {e}")
+            return ""
     
     def load_trades(self, filepath: str) -> Optional[pd.DataFrame]:
         """
@@ -287,10 +372,14 @@ class TradesAnalyzer:
         if df is None:
             return {"error": "Не удалось загрузить данные из файла"}
         
+        # Создаем и открываем Excel файл для проверки данных
+        excel_path = self.create_and_open_excel(df, copied_filepath)
+        
         # Вычисляем средние
         results = self.calculate_averages(df)
         results['source_file'] = original_filepath
         results['copied_file'] = copied_filepath
+        results['excel_file'] = excel_path
         
         return results
     
@@ -314,6 +403,9 @@ class TradesAnalyzer:
         
         if 'copied_file' in results:
             print(f"📂 Скопирован в: {os.path.relpath(results['copied_file'])}")
+        
+        if 'excel_file' in results and results['excel_file']:
+            print(f"📊 Excel файл: {os.path.relpath(results['excel_file'])}")
         
         if 'total_trades' in results:
             print(f"📈 Всего сделок: {results['total_trades']}")
