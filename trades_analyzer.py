@@ -348,35 +348,8 @@ class TradesAnalyzer:
         results = {}
         
         try:
-            # Диагностика данных
-            logger.info("=== ДИАГНОСТИКА ДАННЫХ ===")
-            logger.info(f"Общее количество строк: {len(df)}")
-            
-            for col in df.columns:
-                logger.info(f"Столбец '{col}':")
-                logger.info(f"  - Тип данных: {df[col].dtype}")
-                logger.info(f"  - Пустых значений: {df[col].isna().sum()}")
-                logger.info(f"  - Уникальных значений: {df[col].nunique()}")
-                
-                # Показываем первые несколько значений
-                sample_values = df[col].dropna().head(5).tolist()
-                logger.info(f"  - Примеры значений: {sample_values}")
-                
-                # Для численных столбцов показываем статистику
-                if col in ['Price', 'Amount']:
-                    try:
-                        # Пытаемся преобразовать в числа
-                        numeric_col = pd.to_numeric(df[col], errors='coerce')
-                        valid_count = numeric_col.notna().sum()
-                        logger.info(f"  - Валидных числовых значений: {valid_count}")
-                        
-                        if valid_count > 0:
-                            logger.info(f"  - Мин: {numeric_col.min():.4f}")
-                            logger.info(f"  - Макс: {numeric_col.max():.4f}")
-                            logger.info(f"  - Среднее: {numeric_col.mean():.4f}")
-                            logger.info(f"  - Сумма: {numeric_col.sum():.4f}")
-                    except Exception as e:
-                        logger.warning(f"  - Ошибка анализа как числового столбца: {e}")
+            # Краткая информация о данных
+            logger.info(f"Загружено {len(df)} строк с {len(df.columns)} столбцами: {list(df.columns)}")
             
             # Определяем численные столбцы
             numeric_columns = df.select_dtypes(include=['int64', 'float64']).columns
@@ -400,49 +373,33 @@ class TradesAnalyzer:
                 if not df[col].isna().all():  # Проверяем, что столбец не пустой
                     mean_value = df[col].mean()
                     results[f'avg_{col}'] = mean_value
-                    logger.info(f"Простое среднее {col}: {mean_value:.4f}")
             
             # Вычисляем средневзвешенные значения (VWAP)
             if 'Price' in df.columns and 'Amount' in df.columns:
                 # Убираем строки с NaN значениями
                 clean_df = df[['Price', 'Amount']].dropna()
                 
-                logger.info(f"Строк с валидными Price и Amount: {len(clean_df)} из {len(df)}")
-                
                 if len(clean_df) > 0:
-                    # Показываем несколько примеров данных
-                    logger.info("Примеры валидных данных:")
-                    for i, (_, row) in enumerate(clean_df.head(5).iterrows()):
-                        logger.info(f"  Строка {i+1}: Price={row['Price']:.4f}, Amount={row['Amount']:.4f}")
-                    
                     # VWAP = Σ(Price × Amount) / Σ(Amount)
                     total_volume = clean_df['Amount'].sum()
                     if total_volume > 0:
                         vwap = (clean_df['Price'] * clean_df['Amount']).sum() / total_volume
                         results['vwap_price'] = vwap
-                        logger.info(f"VWAP (средневзвешенная цена): {vwap:.4f}")
                         
                         # Средний размер сделки взвешенный по цене
                         total_price_weight = clean_df['Price'].sum()
                         if total_price_weight > 0:
                             weighted_avg_amount = (clean_df['Amount'] * clean_df['Price']).sum() / total_price_weight
                             results['weighted_avg_amount'] = weighted_avg_amount
-                            logger.info(f"Средневзвешенный объем: {weighted_avg_amount:.4f}")
                     
                     # Дополнительная статистика
                     results['total_volume'] = total_volume
                     results['total_turnover'] = (clean_df['Price'] * clean_df['Amount']).sum()
                     results['valid_trades_count'] = len(clean_df)
-                    
-                    logger.info(f"Общий объем: {total_volume:.4f}")
-                    logger.info(f"Общий оборот: {results['total_turnover']:.2f}")
-                    logger.info(f"Валидных сделок: {len(clean_df)}")
             
             # Общая статистика
             results['total_trades'] = len(df)
             results['analysis_date'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            
-            logger.info(f"Всего сделок: {results['total_trades']}")
             
             # Анализ по тикерам
             if 'Ticker' in df.columns:
@@ -475,14 +432,10 @@ class TradesAnalyzer:
         ticker_results = {}
         
         try:
-            logger.info("=== АНАЛИЗ ПО ТИКЕРАМ ===")
-            
             # Группируем по тикерам
             for ticker in df['Ticker'].unique():
                 ticker_df = df[df['Ticker'] == ticker].copy()
                 ticker_data = {}
-                
-                logger.info(f"Анализ тикера: {ticker}")
                 
                 # Основная статистика
                 ticker_data['total_trades'] = len(ticker_df)
@@ -504,9 +457,6 @@ class TradesAnalyzer:
                         ticker_data['max_price'] = prices.max()
                         ticker_data['price_std'] = prices.std()
                         ticker_data['valid_price_trades'] = len(prices)
-                        
-                        logger.info(f"  Средняя цена: {ticker_data['avg_price']:.4f}")
-                        logger.info(f"  Диапазон цен: {ticker_data['min_price']:.4f} - {ticker_data['max_price']:.4f}")
                 
                 # Анализ объемов
                 if 'Amount' in ticker_df.columns:
@@ -516,9 +466,6 @@ class TradesAnalyzer:
                         ticker_data['total_amount'] = amounts.sum()
                         ticker_data['min_amount'] = amounts.min()
                         ticker_data['max_amount'] = amounts.max()
-                        
-                        logger.info(f"  Средний объем: {ticker_data['avg_amount']:.4f}")
-                        logger.info(f"  Общий объем: {ticker_data['total_amount']:.4f}")
                 
                 # VWAP для тикера
                 if 'Price' in ticker_df.columns and 'Amount' in ticker_df.columns:
@@ -529,11 +476,6 @@ class TradesAnalyzer:
                             vwap = (clean_ticker_df['Price'] * clean_ticker_df['Amount']).sum() / total_volume
                             ticker_data['vwap'] = vwap
                             ticker_data['total_turnover'] = (clean_ticker_df['Price'] * clean_ticker_df['Amount']).sum()
-                            
-                            logger.info(f"  VWAP: {vwap:.4f}")
-                            logger.info(f"  Оборот: {ticker_data['total_turnover']:.2f}")
-                
-                logger.info(f"  Всего сделок: {ticker_data['total_trades']} (Buy: {ticker_data.get('buy_trades', 0)}, Sell: {ticker_data.get('sell_trades', 0)})")
                 
                 ticker_results[ticker] = ticker_data
                 
@@ -555,16 +497,10 @@ class TradesAnalyzer:
         results = {}
         
         try:
-            logger.info("=== АНАЛИЗ СДЕЛОК ТЕКУЩЕЙ СЕССИИ (БЕЗ ПЕРЕНОСОВ) ===")
-            
             # Разделяем на переносы и текущую сессию
             if 'DateCreate' in df.columns:
                 current_session_df = df[df['DateCreate'] != '00:00:00'].copy()
                 transfers_df = df[df['DateCreate'] == '00:00:00'].copy()
-                
-                logger.info(f"Всего сделок: {len(df)}")
-                logger.info(f"Сделок текущей сессии: {len(current_session_df)}")
-                logger.info(f"Переносов с предыдущих сессий: {len(transfers_df)}")
                 
                 if len(current_session_df) == 0:
                     logger.warning("Нет сделок текущей сессии для анализа")
@@ -580,9 +516,6 @@ class TradesAnalyzer:
                     sell_trades = len(current_session_df[current_session_df['Direction'] == 'Sell'])
                     results['current_session_buy_trades'] = buy_trades
                     results['current_session_sell_trades'] = sell_trades
-                    
-                    logger.info(f"Текущая сессия Buy сделки: {buy_trades}")
-                    logger.info(f"Текущая сессия Sell сделки: {sell_trades}")
                 
                 # Анализ цен и объемов для сделок текущей сессии
                 if 'Price' in current_session_df.columns and 'Amount' in current_session_df.columns:
@@ -600,9 +533,6 @@ class TradesAnalyzer:
                             vwap = (clean_current_df['Price'] * clean_current_df['Amount']).sum() / total_volume
                             results['current_session_vwap'] = vwap
                             results['current_session_turnover'] = (clean_current_df['Price'] * clean_current_df['Amount']).sum()
-                            
-                            logger.info(f"VWAP текущей сессии: {vwap:.4f}")
-                            logger.info(f"Оборот текущей сессии: {results['current_session_turnover']:.2f}")
                 
                 # Анализ по тикерам для сделок текущей сессии
                 if 'Ticker' in current_session_df.columns:
@@ -642,8 +572,6 @@ class TradesAnalyzer:
                                     ticker_data['current_turnover'] = (clean_ticker_df['Price'] * clean_ticker_df['Amount']).sum()
                         
                         current_session_ticker_analysis[ticker] = ticker_data
-                        
-                        logger.info(f"Тикер {ticker} - сделок текущей сессии: {ticker_data['current_session_trades']}")
                     
                     results['current_session_ticker_analysis'] = current_session_ticker_analysis
                 
