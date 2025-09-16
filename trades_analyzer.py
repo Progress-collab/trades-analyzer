@@ -29,13 +29,17 @@ logger = logging.getLogger(__name__)
 class TradesAnalyzer:
     """Класс для анализа торговых сделок"""
     
-    def __init__(self, trades_directory: str = r"C:\Sandbox\glaze\Kas\user\current\OneDrive\Рабочий стол"):
+    def __init__(self, trades_directory: str = None):
         """
         Инициализация анализатора
         
         Args:
-            trades_directory: Путь к директории с файлами сделок
+            trades_directory: Путь к директории с файлами сделок (если None, то будет выбор)
         """
+        # Если директория не указана, предлагаем выбор
+        if trades_directory is None:
+            trades_directory = self._choose_source_directory()
+        
         self.trades_directory = trades_directory
         self.input_directory = os.path.join(os.getcwd(), "input")
         
@@ -43,6 +47,67 @@ class TradesAnalyzer:
         if not os.path.exists(self.input_directory):
             os.makedirs(self.input_directory)
             logger.info(f"Создана папка для входных файлов: {self.input_directory}")
+    
+    def _choose_source_directory(self) -> str:
+        """
+        Позволяет пользователю выбрать источник файлов
+        
+        Returns:
+            Путь к выбранной директории
+        """
+        # Определяем путь к рабочему столу
+        desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
+        # Альтернативный путь для Windows
+        if not os.path.exists(desktop_path):
+            desktop_path = os.path.join(os.path.expanduser("~"), "OneDrive", "Рабочий стол")
+        if not os.path.exists(desktop_path):
+            desktop_path = os.path.join(os.path.expanduser("~"), "Рабочий стол")
+        
+        # Варианты источников
+        sources = {
+            1: {
+                "name": "Папка Kas (основной источник)",
+                "path": r"C:\Sandbox\glaze\Kas\user\current\OneDrive\Рабочий стол"
+            },
+            2: {
+                "name": "Рабочий стол пользователя",
+                "path": desktop_path
+            }
+        }
+        
+        print("\n" + "="*60)
+        print("📁 ВЫБОР ИСТОЧНИКА ФАЙЛОВ СДЕЛОК")
+        print("="*60)
+        
+        for key, source in sources.items():
+            status = "✅" if os.path.exists(source["path"]) else "❌"
+            print(f"{key}. {source['name']}")
+            print(f"   Путь: {source['path']}")
+            print(f"   Статус: {status} {'Доступна' if os.path.exists(source['path']) else 'Недоступна'}")
+            print()
+        
+        while True:
+            try:
+                choice = input("Выберите источник (1 или 2): ").strip()
+                choice_num = int(choice)
+                
+                if choice_num in sources:
+                    selected_source = sources[choice_num]
+                    if os.path.exists(selected_source["path"]):
+                        print(f"✅ Выбран источник: {selected_source['name']}")
+                        print(f"📁 Путь: {selected_source['path']}")
+                        return selected_source["path"]
+                    else:
+                        print(f"❌ Папка недоступна: {selected_source['path']}")
+                        print("Попробуйте другой вариант.")
+                else:
+                    print("❌ Неверный выбор. Введите 1 или 2.")
+                    
+            except ValueError:
+                print("❌ Введите число 1 или 2.")
+            except KeyboardInterrupt:
+                print("\n❌ Отменено пользователем.")
+                sys.exit(1)
         
     def get_today_trades_file(self) -> Optional[str]:
         """
@@ -203,6 +268,12 @@ class TradesAnalyzer:
                 
                 # Настраиваем ширину столбцов для всех листов (в самом конце)
                 self._adjust_column_widths(writer)
+                
+                # Устанавливаем активный лист "Сессия_по_тикерам" при открытии
+                if 'Сессия_по_тикерам' in writer.sheets:
+                    workbook = writer.book
+                    workbook.active = writer.sheets['Сессия_по_тикерам']
+                    logger.info("Установлен активный лист: Сессия_по_тикерам")
             
             logger.info(f"Excel файл создан: {excel_filename}")
             
