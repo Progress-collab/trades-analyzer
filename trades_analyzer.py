@@ -158,6 +158,7 @@ class TradesAnalyzer:
                             'VWAP': data.get('vwap', 'N/A'),
                             'Средний объем': data.get('avg_amount', 'N/A'),
                             'Общий объем': data.get('total_amount', 'N/A'),
+                            'Чистый объем (Buy-Sell)': data.get('net_amount', 'N/A'),
                             'Оборот': data.get('total_turnover', 'N/A')
                         }
                         ticker_summary.append(row)
@@ -191,6 +192,7 @@ class TradesAnalyzer:
                                 'VWAP текущей сессии': data.get('current_vwap', 'N/A'),
                                 'Средний объем сессии': data.get('current_avg_amount', 'N/A'),
                                 'Общий объем сессии': data.get('current_total_amount', 'N/A'),
+                                'Чистый объем сессии (Buy-Sell)': data.get('current_net_amount', 'N/A'),
                                 'Оборот сессии': data.get('current_turnover', 'N/A')
                             }
                             current_ticker_summary.append(row)
@@ -461,6 +463,17 @@ class TradesAnalyzer:
                         ticker_data['total_amount'] = amounts.sum()
                         ticker_data['min_amount'] = amounts.min()
                         ticker_data['max_amount'] = amounts.max()
+                        
+                        # Чистый объем с учетом направления (Buy: +, Sell: -)
+                        if 'Direction' in ticker_df.columns:
+                            net_amount = 0
+                            for _, row in ticker_df.iterrows():
+                                if pd.notna(row['Amount']):
+                                    if row['Direction'] == 'Buy':
+                                        net_amount += row['Amount']
+                                    elif row['Direction'] == 'Sell':
+                                        net_amount -= row['Amount']
+                            ticker_data['net_amount'] = net_amount
                 
                 # VWAP для тикера
                 if 'Price' in ticker_df.columns and 'Amount' in ticker_df.columns:
@@ -555,6 +568,17 @@ class TradesAnalyzer:
                             if len(amounts) > 0:
                                 ticker_data['current_avg_amount'] = amounts.mean()
                                 ticker_data['current_total_amount'] = amounts.sum()
+                                
+                                # Чистый объем текущей сессии с учетом направления (Buy: +, Sell: -)
+                                if 'Direction' in ticker_current_df.columns:
+                                    net_amount = 0
+                                    for _, row in ticker_current_df.iterrows():
+                                        if pd.notna(row['Amount']):
+                                            if row['Direction'] == 'Buy':
+                                                net_amount += row['Amount']
+                                            elif row['Direction'] == 'Sell':
+                                                net_amount -= row['Amount']
+                                    ticker_data['current_net_amount'] = net_amount
                         
                         # VWAP для тикера (только текущая сессия)
                         if 'Price' in ticker_current_df.columns and 'Amount' in ticker_current_df.columns:
@@ -701,6 +725,10 @@ class TradesAnalyzer:
                     print(f"   Средний объем: {data['avg_amount']:.2f}")
                 if 'total_amount' in data:
                     print(f"   Общий объем: {data['total_amount']:.0f}")
+                if 'net_amount' in data:
+                    net_val = data['net_amount']
+                    direction = "📈" if net_val > 0 else "📉" if net_val < 0 else "➡️"
+                    print(f"   Чистый объем: {direction} {net_val:+.0f}")
                 if 'total_turnover' in data:
                     print(f"   Оборот: {data['total_turnover']:,.2f} ₽")
         
