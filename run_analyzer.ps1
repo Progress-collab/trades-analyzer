@@ -1,68 +1,55 @@
-# Скрипт для запуска анализатора торговых сделок
-# Автор: Glaze
-# Дата создания: 16.09.2025
+# Trades Analyzer Launcher
+# Simple PowerShell script for Windows PowerShell compatibility
+
+# Change to script directory
+Set-Location -Path $PSScriptRoot
 
 Write-Host "============================================================" -ForegroundColor Cyan
-Write-Host "Анализатор торговых сделок" -ForegroundColor Yellow
+Write-Host "TRADES ANALYZER" -ForegroundColor Yellow  
 Write-Host "============================================================" -ForegroundColor Cyan
+Write-Host "Working directory: $(Get-Location)" -ForegroundColor Gray
 Write-Host ""
 
-# Проверяем наличие Python
-try 
-{
-    $pythonVersion = python --version 2>&1
-    Write-Host "Python найден: $pythonVersion" -ForegroundColor Green
-} 
-catch 
-{
-    Write-Host "Python не найден! Установите Python для работы скрипта." -ForegroundColor Red
-    Read-Host "Нажмите Enter для выхода"
+try {
+    $version = python --version 2>&1
+    Write-Host "Python found: $version" -ForegroundColor Green
+} catch {
+    Write-Host "Python not found!" -ForegroundColor Red
+    Read-Host "Press Enter to exit"
     exit 1
 }
 
-# Проверяем наличие основного файла
-if (-not (Test-Path "trades_analyzer.py")) 
-{
-    Write-Host "Файл trades_analyzer.py не найден!" -ForegroundColor Red
-    Read-Host "Нажмите Enter для выхода"
+if (-not (Test-Path "trades_analyzer.py")) {
+    Write-Host "trades_analyzer.py not found!" -ForegroundColor Red
+    Read-Host "Press Enter to exit"
     exit 1
 }
 
-# Проверяем наличие папки input
-if (-not (Test-Path "input")) 
-{
-    Write-Host "Создаю папку input..." -ForegroundColor Yellow
+if (-not (Test-Path "input")) {
+    Write-Host "Creating input folder..." -ForegroundColor Yellow
     New-Item -ItemType Directory -Path "input" -Force | Out-Null
 }
 
-Write-Host "Запускаю анализ торговых сделок..." -ForegroundColor Yellow
+Write-Host "Starting trades analysis..." -ForegroundColor Yellow
 Write-Host ""
 
-# Запускаем анализатор
-try 
-{
+try {
     python trades_analyzer.py
     
-    if ($LASTEXITCODE -eq 0) 
-    {
+    if ($LASTEXITCODE -eq 0) {
         Write-Host ""
-        Write-Host "Анализ завершен успешно!" -ForegroundColor Green
-        Write-Host "Excel файл с результатами открыт автоматически" -ForegroundColor Green
-        Write-Host "Все файлы сохранены в папке input/" -ForegroundColor Green
-        Write-Host "Активный лист: Сессия_по_тикерам" -ForegroundColor Green
-    } 
-    else 
-    {
+        Write-Host "Analysis completed successfully!" -ForegroundColor Green
+        Write-Host "Excel file opened automatically" -ForegroundColor Green
+        Write-Host "Files saved in input/ folder" -ForegroundColor Green
+    } else {
         Write-Host ""
-        Write-Host "Ошибка при выполнении анализа!" -ForegroundColor Red
+        Write-Host "Error during analysis!" -ForegroundColor Red
     }
-} 
-catch 
-{
+} catch {
     Write-Host ""
-    Write-Host "Критическая ошибка: $_" -ForegroundColor Red
+    Write-Host "Critical error: $_" -ForegroundColor Red
 }
 
 Write-Host ""
 Write-Host "============================================================" -ForegroundColor Cyan
-Read-Host "Нажмите Enter для выхода"
+Read-Host "Press Enter to exit"
