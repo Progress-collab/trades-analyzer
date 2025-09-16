@@ -142,6 +142,9 @@ class TradesAnalyzer:
                 stats_df = pd.DataFrame(stats_data)
                 stats_df.to_excel(writer, sheet_name='Статистика', index=False)
                 
+                # Настраиваем ширину столбцов для всех листов
+                self._adjust_column_widths(writer)
+                
                 
                 # Анализ по тикерам (если есть результаты анализа)
                 if hasattr(self, '_last_ticker_analysis') and self._last_ticker_analysis:
@@ -227,6 +230,36 @@ class TradesAnalyzer:
             logger.error(f"Ошибка при создании Excel файла: {e}")
             return ""
     
+    def _adjust_column_widths(self, writer):
+        """
+        Автоматически настраивает ширину столбцов для всех листов в Excel файле
+        
+        Args:
+            writer: ExcelWriter объект
+        """
+        try:
+            for sheet_name in writer.sheets:
+                worksheet = writer.sheets[sheet_name]
+                
+                # Автоматическая ширина столбцов
+                for column in worksheet.columns:
+                    max_length = 0
+                    column_letter = column[0].column_letter
+                    
+                    for cell in column:
+                        try:
+                            if len(str(cell.value)) > max_length:
+                                max_length = len(str(cell.value))
+                        except:
+                            pass
+                    
+                    # Устанавливаем ширину с небольшим запасом
+                    adjusted_width = min(max_length + 2, 50)  # Максимум 50 символов
+                    worksheet.column_dimensions[column_letter].width = adjusted_width
+                    
+        except Exception as e:
+            logger.warning(f"Ошибка при настройке ширины столбцов: {e}")
+    
     def create_parsed_excel(self, df: pd.DataFrame, source_filepath: str) -> str:
         """
         Создает простой Excel файл с распарсенными данными
@@ -247,6 +280,9 @@ class TradesAnalyzer:
             # Создаем простой Excel файл только с данными
             with pd.ExcelWriter(excel_path, engine='openpyxl') as writer:
                 df.to_excel(writer, sheet_name='Распарсенные_данные', index=False)
+                
+                # Настраиваем ширину столбцов
+                self._adjust_column_widths(writer)
             
             logger.info(f"Распарсенный Excel файл создан: {excel_filename}")
             return excel_path
