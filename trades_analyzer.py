@@ -142,9 +142,6 @@ class TradesAnalyzer:
                 stats_df = pd.DataFrame(stats_data)
                 stats_df.to_excel(writer, sheet_name='Статистика', index=False)
                 
-                # Настраиваем ширину столбцов для всех листов
-                self._adjust_column_widths(writer)
-                
                 
                 # Анализ по тикерам (если есть результаты анализа)
                 if hasattr(self, '_last_ticker_analysis') and self._last_ticker_analysis:
@@ -203,6 +200,9 @@ class TradesAnalyzer:
                         if current_ticker_summary:
                             current_ticker_df = pd.DataFrame(current_ticker_summary)
                             current_ticker_df.to_excel(writer, sheet_name='Сессия_по_тикерам', index=False)
+                
+                # Настраиваем ширину столбцов для всех листов (в самом конце)
+                self._adjust_column_widths(writer)
             
             logger.info(f"Excel файл создан: {excel_filename}")
             
@@ -246,16 +246,27 @@ class TradesAnalyzer:
                     max_length = 0
                     column_letter = column[0].column_letter
                     
+                    # Проходим по всем ячейкам в столбце
                     for cell in column:
                         try:
-                            if len(str(cell.value)) > max_length:
-                                max_length = len(str(cell.value))
+                            cell_value = str(cell.value) if cell.value is not None else ""
+                            # Учитываем длину содержимого ячейки
+                            if len(cell_value) > max_length:
+                                max_length = len(cell_value)
                         except:
                             pass
                     
-                    # Устанавливаем ширину с небольшим запасом
-                    adjusted_width = min(max_length + 2, 50)  # Максимум 50 символов
+                    # Устанавливаем ширину с запасом
+                    # Минимум 10 символов, максимум 60, плюс запас 3 символа
+                    adjusted_width = max(10, min(max_length + 3, 60))
+                    
+                    # Для некоторых типов столбцов устанавливаем минимальную ширину
+                    if any(keyword in str(column[0].value).lower() for keyword in ['цена', 'price', 'vwap', 'оборот', 'объем']):
+                        adjusted_width = max(adjusted_width, 15)
+                    
                     worksheet.column_dimensions[column_letter].width = adjusted_width
+                    
+                logger.info(f"Настроена ширина столбцов для листа '{sheet_name}'")
                     
         except Exception as e:
             logger.warning(f"Ошибка при настройке ширины столбцов: {e}")
