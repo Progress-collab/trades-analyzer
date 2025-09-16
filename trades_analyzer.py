@@ -55,23 +55,40 @@ class TradesAnalyzer:
         Returns:
             Путь к выбранной директории
         """
-        # Определяем путь к рабочему столу
-        desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
-        # Альтернативный путь для Windows
-        if not os.path.exists(desktop_path):
-            desktop_path = os.path.join(os.path.expanduser("~"), "OneDrive", "Рабочий стол")
-        if not os.path.exists(desktop_path):
-            desktop_path = os.path.join(os.path.expanduser("~"), "Рабочий стол")
+        # Определяем путь к рабочему столу через стандартные переменные Windows
+        userprofile = os.environ.get('USERPROFILE', os.path.expanduser("~"))
         
-        # Варианты источников
+        # Пробуем разные варианты рабочего стола
+        desktop_variants = [
+            os.path.join(userprofile, "Desktop"),
+            os.path.join(userprofile, "OneDrive", "Desktop"), 
+            os.path.join(userprofile, "OneDrive", "Рабочий стол"),
+            os.path.join(userprofile, "Рабочий стол")
+        ]
+        
+        desktop_path = None
+        for variant in desktop_variants:
+            if os.path.exists(variant):
+                desktop_path = variant
+                break
+        
+        # Если не нашли, используем USERPROFILE
+        if desktop_path is None:
+            desktop_path = userprofile
+        
+        # Используем найденные рабочие пути
+        kas_path = r"C:\Sandbox\glaze\Kas\user\current\OneDrive\Рабочий стол"
+        # Используем точный путь к рабочему столу через USERPROFILE
+        desktop_real_path = os.path.join(os.environ.get('USERPROFILE', ''), "OneDrive", "Рабочий стол")
+        
         sources = {
             1: {
                 "name": "Папка Kas (основной источник)",
-                "path": r"C:\Sandbox\glaze\Kas\user\current\OneDrive\Рабочий стол"
+                "path": kas_path
             },
             2: {
-                "name": "Рабочий стол пользователя",
-                "path": desktop_path
+                "name": "Рабочий стол пользователя", 
+                "path": desktop_real_path
             }
         }
         
