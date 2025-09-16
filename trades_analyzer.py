@@ -161,8 +161,8 @@ class TradesAnalyzer:
                 
                 logger.info(f"Excel файл открыт: {excel_filename}")
                 
-                # Ждем немного, чтобы пользователь мог посмотреть на данные
-                input("\n⏸️  Excel файл открыт. Проверьте данные и нажмите Enter для продолжения анализа...")
+                # Ждем немного, чтобы пользователь мог посмотреть на финальную статистику
+                input("\n⏸️  Финальный аналитический Excel файл открыт. Проверьте статистику и нажмите Enter для завершения...")
                 
             except Exception as e:
                 logger.warning(f"Не удалось автоматически открыть Excel файл: {e}")
@@ -172,6 +172,34 @@ class TradesAnalyzer:
             
         except Exception as e:
             logger.error(f"Ошибка при создании Excel файла: {e}")
+            return ""
+    
+    def create_parsed_excel(self, df: pd.DataFrame, source_filepath: str) -> str:
+        """
+        Создает простой Excel файл с распарсенными данными
+        
+        Args:
+            df: DataFrame с данными
+            source_filepath: Путь к исходному файлу
+            
+        Returns:
+            Путь к созданному Excel файлу
+        """
+        try:
+            # Формируем имя Excel файла
+            base_name = os.path.splitext(os.path.basename(source_filepath))[0]
+            excel_filename = f"{base_name}_parsed.xlsx"
+            excel_path = os.path.join(self.input_directory, excel_filename)
+            
+            # Создаем простой Excel файл только с данными
+            with pd.ExcelWriter(excel_path, engine='openpyxl') as writer:
+                df.to_excel(writer, sheet_name='Распарсенные_данные', index=False)
+            
+            logger.info(f"Распарсенный Excel файл создан: {excel_filename}")
+            return excel_path
+            
+        except Exception as e:
+            logger.error(f"Ошибка при создании распарсенного Excel файла: {e}")
             return ""
     
     def load_trades(self, filepath: str) -> Optional[pd.DataFrame]:
@@ -209,9 +237,24 @@ class TradesAnalyzer:
                                 # Разделяем данные
                                 data_rows = []
                                 for _, row in df.iterrows():
-                                    values = str(row[column_name]).split('/')
+                                    row_data = str(row[column_name]).strip()
+                                    # Пропускаем пустые строки
+                                    if not row_data or row_data == 'nan':
+                                        continue
+                                    values = row_data.split('/')
                                     if len(values) == len(headers):
-                                        data_rows.append(values)
+                                        # Очищаем пустые значения и заменяем запятые на точки в числах
+                                        cleaned_values = []
+                                        for i, val in enumerate(values):
+                                            val = val.strip()
+                                            # Для Price, Fee, Amount заменяем запятые на точки
+                                            if headers[i] in ['Price', 'Fee', 'Amount'] and val:
+                                                val = val.replace(',', '.')
+                                            # Заменяем пустые строки на None для численных полей
+                                            if val == '' and headers[i] in ['Price', 'Fee', 'Amount']:
+                                                val = None
+                                            cleaned_values.append(val)
+                                        data_rows.append(cleaned_values)
                                 
                                 if data_rows:
                                     new_df = pd.DataFrame(data_rows, columns=headers)
@@ -367,18 +410,57 @@ class TradesAnalyzer:
         # Копируем файл в папку input
         copied_filepath = self.copy_file_to_input(original_filepath)
         
-        # Загружаем данные из скопированного файла
+        # Сначала открываем исходный CSV файл в Excel "как есть"
+        logger.info("Открываем исходный CSV файл в Excel для проверки...")
+        try:
+            if sys.platform == "win32":
+                os.startfile(copied_filepath)
+            elif sys.platform == "darwin":  # macOS
+                subprocess.run(["open", copied_filepath])
+            else:  # Linux
+                subprocess.run(["xdg-open", copied_filepath])
+            
+            logger.info(f"CSV файл открыт в Excel: {os.path.basename(copied_filepath)}")
+            input("\n⏸️  Исходный CSV файл открыт в Excel. Проверьте сырые данные и нажмите Enter для парсинга...")
+            
+        except Exception as e:
+            logger.warning(f"Не удалось автоматически открыть CSV файл: {e}")
+            logger.info(f"Вы можете открыть файл вручную: {copied_filepath}")
+        
+        # Загружаем и парсим данные с разделителем "/"
+        logger.info("Парсим CSV файл с разделителем '/'...")
         df = self.load_trades(copied_filepath)
         if df is None:
             return {"error": "Не удалось загрузить данные из файла"}
         
-        # Создаем и открываем Excel файл для проверки данных
+        # Создаем Excel файл с распарсенными данными
+        parsed_excel_path = self.create_parsed_excel(df, copied_filepath)
+        
+        # Открываем распарсенный Excel файл для проверки
+        logger.info("Открываем распарсенный Excel файл для проверки...")
+        try:
+            if sys.platform == "win32":
+                os.startfile(parsed_excel_path)
+            elif sys.platform == "darwin":  # macOS
+                subprocess.run(["open", parsed_excel_path])
+            else:  # Linux
+                subprocess.run(["xdg-open", parsed_excel_path])
+            
+            logger.info(f"Распарсенный Excel файл открыт: {os.path.basename(parsed_excel_path)}")
+            input("\n⏸️  Распарсенный Excel файл открыт. Проверьте данные и нажмите Enter для анализа...")
+            
+        except Exception as e:
+            logger.warning(f"Не удалось автоматически открыть Excel файл: {e}")
+            logger.info(f"Вы можете открыть файл вручную: {parsed_excel_path}")
+        
+        # Создаем полный аналитический Excel файл
         excel_path = self.create_and_open_excel(df, copied_filepath)
         
         # Вычисляем средние
         results = self.calculate_averages(df)
         results['source_file'] = original_filepath
         results['copied_file'] = copied_filepath
+        results['parsed_excel_file'] = parsed_excel_path
         results['excel_file'] = excel_path
         
         return results
@@ -404,8 +486,11 @@ class TradesAnalyzer:
         if 'copied_file' in results:
             print(f"📂 Скопирован в: {os.path.relpath(results['copied_file'])}")
         
+        if 'parsed_excel_file' in results and results['parsed_excel_file']:
+            print(f"📋 Распарсенный Excel: {os.path.relpath(results['parsed_excel_file'])}")
+        
         if 'excel_file' in results and results['excel_file']:
-            print(f"📊 Excel файл: {os.path.relpath(results['excel_file'])}")
+            print(f"📊 Аналитический Excel: {os.path.relpath(results['excel_file'])}")
         
         if 'total_trades' in results:
             print(f"📈 Всего сделок: {results['total_trades']}")
