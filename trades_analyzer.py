@@ -170,6 +170,39 @@ class TradesAnalyzer:
                     if ticker_summary:
                         ticker_df = pd.DataFrame(ticker_summary)
                         ticker_df.to_excel(writer, sheet_name='Анализ_по_тикерам', index=False)
+                
+                # Сделки текущей сессии (исключая переносы с 00:00:00)
+                if hasattr(self, '_last_current_session_analysis') and self._last_current_session_analysis:
+                    current_session_data = self._last_current_session_analysis
+                    
+                    # Лист с сделками текущей сессии
+                    if 'current_session_dataframe' in current_session_data:
+                        current_df = current_session_data['current_session_dataframe']
+                        if len(current_df) > 0:
+                            current_df.to_excel(writer, sheet_name='Текущая_сессия', index=False)
+                    
+                    # Анализ по тикерам для текущей сессии
+                    if 'current_session_ticker_analysis' in current_session_data:
+                        current_ticker_summary = []
+                        for ticker, data in current_session_data['current_session_ticker_analysis'].items():
+                            row = {
+                                'Тикер': ticker,
+                                'Сделок текущей сессии': data.get('current_session_trades', 0),
+                                'Current Buy': data.get('current_buy_trades', 0),
+                                'Current Sell': data.get('current_sell_trades', 0),
+                                'Средняя цена сессии': data.get('current_avg_price', 'N/A'),
+                                'Мин цена сессии': data.get('current_min_price', 'N/A'),
+                                'Макс цена сессии': data.get('current_max_price', 'N/A'),
+                                'VWAP текущей сессии': data.get('current_vwap', 'N/A'),
+                                'Средний объем сессии': data.get('current_avg_amount', 'N/A'),
+                                'Общий объем сессии': data.get('current_total_amount', 'N/A'),
+                                'Оборот сессии': data.get('current_turnover', 'N/A')
+                            }
+                            current_ticker_summary.append(row)
+                        
+                        if current_ticker_summary:
+                            current_ticker_df = pd.DataFrame(current_ticker_summary)
+                            current_ticker_df.to_excel(writer, sheet_name='Сессия_по_тикерам', index=False)
             
             logger.info(f"Excel файл создан: {excel_filename}")
             
@@ -418,6 +451,12 @@ class TradesAnalyzer:
                 # Сохраняем для использования в Excel
                 self._last_ticker_analysis = ticker_analysis
             
+            # Анализ сделок текущей сессии (исключая переносы с 00:00:00)
+            current_session_analysis = self.analyze_current_session_trades(df)
+            results['current_session_analysis'] = current_session_analysis
+            # Сохраняем для использования в Excel
+            self._last_current_session_analysis = current_session_analysis
+            
         except Exception as e:
             logger.error(f"Ошибка при вычислении средних: {e}")
         
@@ -503,6 +542,119 @@ class TradesAnalyzer:
         
         return ticker_results
     
+    def analyze_current_session_trades(self, df: pd.DataFrame) -> Dict[str, Any]:
+        """
+        Анализирует только сделки текущей сессии (исключая переносы с 00:00:00)
+        
+        Args:
+            df: DataFrame с данными о сделках
+            
+        Returns:
+            Результаты анализа сделок текущей сессии
+        """
+        results = {}
+        
+        try:
+            logger.info("=== АНАЛИЗ СДЕЛОК ТЕКУЩЕЙ СЕССИИ (БЕЗ ПЕРЕНОСОВ) ===")
+            
+            # Разделяем на переносы и текущую сессию
+            if 'DateCreate' in df.columns:
+                current_session_df = df[df['DateCreate'] != '00:00:00'].copy()
+                transfers_df = df[df['DateCreate'] == '00:00:00'].copy()
+                
+                logger.info(f"Всего сделок: {len(df)}")
+                logger.info(f"Сделок текущей сессии: {len(current_session_df)}")
+                logger.info(f"Переносов с предыдущих сессий: {len(transfers_df)}")
+                
+                if len(current_session_df) == 0:
+                    logger.warning("Нет сделок текущей сессии для анализа")
+                    return {"error": "Нет сделок текущей сессии"}
+                
+                # Общая статистика сделок текущей сессии
+                results['current_session_trades'] = len(current_session_df)
+                results['transfers_trades'] = len(transfers_df)
+                
+                # Анализ направлений для сделок текущей сессии
+                if 'Direction' in current_session_df.columns:
+                    buy_trades = len(current_session_df[current_session_df['Direction'] == 'Buy'])
+                    sell_trades = len(current_session_df[current_session_df['Direction'] == 'Sell'])
+                    results['current_session_buy_trades'] = buy_trades
+                    results['current_session_sell_trades'] = sell_trades
+                    
+                    logger.info(f"Текущая сессия Buy сделки: {buy_trades}")
+                    logger.info(f"Текущая сессия Sell сделки: {sell_trades}")
+                
+                # Анализ цен и объемов для сделок текущей сессии
+                if 'Price' in current_session_df.columns and 'Amount' in current_session_df.columns:
+                    clean_current_df = current_session_df[['Price', 'Amount']].dropna()
+                    
+                    if len(clean_current_df) > 0:
+                        # Простые средние
+                        results['current_session_avg_price'] = clean_current_df['Price'].mean()
+                        results['current_session_avg_amount'] = clean_current_df['Amount'].mean()
+                        results['current_session_total_volume'] = clean_current_df['Amount'].sum()
+                        
+                        # VWAP для сделок текущей сессии
+                        total_volume = clean_current_df['Amount'].sum()
+                        if total_volume > 0:
+                            vwap = (clean_current_df['Price'] * clean_current_df['Amount']).sum() / total_volume
+                            results['current_session_vwap'] = vwap
+                            results['current_session_turnover'] = (clean_current_df['Price'] * clean_current_df['Amount']).sum()
+                            
+                            logger.info(f"VWAP текущей сессии: {vwap:.4f}")
+                            logger.info(f"Оборот текущей сессии: {results['current_session_turnover']:.2f}")
+                
+                # Анализ по тикерам для сделок текущей сессии
+                if 'Ticker' in current_session_df.columns:
+                    current_session_ticker_analysis = {}
+                    
+                    for ticker in current_session_df['Ticker'].unique():
+                        ticker_current_df = current_session_df[current_session_df['Ticker'] == ticker].copy()
+                        ticker_data = {}
+                        
+                        ticker_data['current_session_trades'] = len(ticker_current_df)
+                        
+                        if 'Direction' in ticker_current_df.columns:
+                            ticker_data['current_buy_trades'] = len(ticker_current_df[ticker_current_df['Direction'] == 'Buy'])
+                            ticker_data['current_sell_trades'] = len(ticker_current_df[ticker_current_df['Direction'] == 'Sell'])
+                        
+                        if 'Price' in ticker_current_df.columns:
+                            prices = ticker_current_df['Price'].dropna()
+                            if len(prices) > 0:
+                                ticker_data['current_avg_price'] = prices.mean()
+                                ticker_data['current_min_price'] = prices.min()
+                                ticker_data['current_max_price'] = prices.max()
+                        
+                        if 'Amount' in ticker_current_df.columns:
+                            amounts = ticker_current_df['Amount'].dropna()
+                            if len(amounts) > 0:
+                                ticker_data['current_avg_amount'] = amounts.mean()
+                                ticker_data['current_total_amount'] = amounts.sum()
+                        
+                        # VWAP для тикера (только текущая сессия)
+                        if 'Price' in ticker_current_df.columns and 'Amount' in ticker_current_df.columns:
+                            clean_ticker_df = ticker_current_df[['Price', 'Amount']].dropna()
+                            if len(clean_ticker_df) > 0:
+                                total_volume = clean_ticker_df['Amount'].sum()
+                                if total_volume > 0:
+                                    vwap = (clean_ticker_df['Price'] * clean_ticker_df['Amount']).sum() / total_volume
+                                    ticker_data['current_vwap'] = vwap
+                                    ticker_data['current_turnover'] = (clean_ticker_df['Price'] * clean_ticker_df['Amount']).sum()
+                        
+                        current_session_ticker_analysis[ticker] = ticker_data
+                        
+                        logger.info(f"Тикер {ticker} - сделок текущей сессии: {ticker_data['current_session_trades']}")
+                    
+                    results['current_session_ticker_analysis'] = current_session_ticker_analysis
+                
+                # Сохраняем отфильтрованные данные для Excel
+                results['current_session_dataframe'] = current_session_df
+                
+        except Exception as e:
+            logger.error(f"Ошибка при анализе сделок текущей сессии: {e}")
+        
+        return results
+    
     def analyze_today(self) -> Dict[str, Any]:
         """
         Анализирует сделки за сегодня
@@ -520,54 +672,20 @@ class TradesAnalyzer:
         # Копируем файл в папку input
         copied_filepath = self.copy_file_to_input(original_filepath)
         
-        # Сначала открываем исходный CSV файл в Excel "как есть"
-        logger.info("Открываем исходный CSV файл в Excel для проверки...")
-        try:
-            if sys.platform == "win32":
-                os.startfile(copied_filepath)
-            elif sys.platform == "darwin":  # macOS
-                subprocess.run(["open", copied_filepath])
-            else:  # Linux
-                subprocess.run(["xdg-open", copied_filepath])
-            
-            logger.info(f"CSV файл открыт в Excel: {os.path.basename(copied_filepath)}")
-            input("\n⏸️  Исходный CSV файл открыт в Excel. Проверьте сырые данные и нажмите Enter для парсинга...")
-            
-        except Exception as e:
-            logger.warning(f"Не удалось автоматически открыть CSV файл: {e}")
-            logger.info(f"Вы можете открыть файл вручную: {copied_filepath}")
-        
         # Загружаем и парсим данные с разделителем "/"
         logger.info("Парсим CSV файл с разделителем '/'...")
         df = self.load_trades(copied_filepath)
         if df is None:
             return {"error": "Не удалось загрузить данные из файла"}
         
-        # Создаем Excel файл с распарсенными данными
+        # Создаем Excel файл с распарсенными данными (но не открываем)
         parsed_excel_path = self.create_parsed_excel(df, copied_filepath)
         
-        # Открываем распарсенный Excel файл для проверки
-        logger.info("Открываем распарсенный Excel файл для проверки...")
-        try:
-            if sys.platform == "win32":
-                os.startfile(parsed_excel_path)
-            elif sys.platform == "darwin":  # macOS
-                subprocess.run(["open", parsed_excel_path])
-            else:  # Linux
-                subprocess.run(["xdg-open", parsed_excel_path])
-            
-            logger.info(f"Распарсенный Excel файл открыт: {os.path.basename(parsed_excel_path)}")
-            input("\n⏸️  Распарсенный Excel файл открыт. Проверьте данные и нажмите Enter для анализа...")
-            
-        except Exception as e:
-            logger.warning(f"Не удалось автоматически открыть Excel файл: {e}")
-            logger.info(f"Вы можете открыть файл вручную: {parsed_excel_path}")
-        
-        # Создаем полный аналитический Excel файл
-        excel_path = self.create_and_open_excel(df, copied_filepath)
-        
-        # Вычисляем средние
+        # Вычисляем средние (включая анализ по тикерам)
         results = self.calculate_averages(df)
+        
+        # Создаем полный аналитический Excel файл (уже с данными по тикерам)
+        excel_path = self.create_and_open_excel(df, copied_filepath)
         results['source_file'] = original_filepath
         results['copied_file'] = copied_filepath
         results['parsed_excel_file'] = parsed_excel_path
