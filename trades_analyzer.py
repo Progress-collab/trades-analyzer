@@ -210,10 +210,9 @@ class TradesAnalyzer:
             Путь к созданному Excel файлу
         """
         try:
-            # Формируем имя Excel файла с датой и временем
+            # Формируем имя Excel файла (используем имя скопированного файла без добавления нового timestamp)
             base_name = os.path.splitext(os.path.basename(source_filepath))[0]
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            excel_filename = f"{base_name}_analyzed_{timestamp}.xlsx"
+            excel_filename = f"{base_name}_analyzed.xlsx"
             excel_path = os.path.join(self.input_directory, excel_filename)
             
             # Создаем Excel файл с несколькими листами
@@ -397,10 +396,9 @@ class TradesAnalyzer:
             Путь к созданному Excel файлу
         """
         try:
-            # Формируем имя Excel файла с датой и временем
+            # Формируем имя Excel файла (используем имя скопированного файла без добавления нового timestamp)
             base_name = os.path.splitext(os.path.basename(source_filepath))[0]
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            excel_filename = f"{base_name}_parsed_{timestamp}.xlsx"
+            excel_filename = f"{base_name}_parsed.xlsx"
             excel_path = os.path.join(self.input_directory, excel_filename)
             
             # Создаем простой Excel файл только с данными
