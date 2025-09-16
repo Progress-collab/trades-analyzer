@@ -42,6 +42,7 @@ try {
         Write-Host "✅ Анализ завершен успешно!" -ForegroundColor Green
         Write-Host "📊 Excel файл с результатами открыт автоматически" -ForegroundColor Green
         Write-Host "📂 Все файлы сохранены в папке input/" -ForegroundColor Green
+        Write-Host "🎯 Активный лист: Сессия_по_тикерам" -ForegroundColor Green
     } else {
         Write-Host ""
         Write-Host "❌ Ошибка при выполнении анализа!" -ForegroundColor Red
