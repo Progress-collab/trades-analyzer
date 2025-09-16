@@ -41,6 +41,7 @@ class TradesAnalyzer:
             trades_directory = self._choose_source_directory()
         
         self.trades_directory = trades_directory
+        self.auto_all_mode = (trades_directory == "auto_all")
         self.input_directory = os.path.join(os.getcwd(), "input")
         
         # Создаем папку input если её нет
@@ -93,6 +94,10 @@ class TradesAnalyzer:
             3: {
                 "name": "Песочница LiteRuslan",
                 "path": literuslan_path
+            },
+            4: {
+                "name": "Все источники (автоматический анализ всех)",
+                "path": "auto_all"
             }
         }
         
@@ -109,10 +114,13 @@ class TradesAnalyzer:
         
         while True:
             try:
-                choice = input("Выберите источник (1, 2 или 3): ").strip()
+                choice = input("Выберите источник (1, 2, 3 или 4): ").strip()
                 choice_num = int(choice)
                 
-                if choice_num in sources:
+                if choice_num == 4:
+                    print("✅ Выбран автоматический анализ всех источников")
+                    return "auto_all"
+                elif choice_num in sources and choice_num != 4:
                     selected_source = sources[choice_num]
                     if os.path.exists(selected_source["path"]):
                         print(f"✅ Выбран источник: {selected_source['name']}")
@@ -122,10 +130,10 @@ class TradesAnalyzer:
                         print(f"❌ Папка недоступна: {selected_source['path']}")
                         print("Попробуйте другой вариант.")
                 else:
-                    print("❌ Неверный выбор. Введите 1, 2 или 3.")
+                    print("❌ Неверный выбор. Введите 1, 2, 3 или 4.")
                     
             except ValueError:
-                print("❌ Введите число 1, 2 или 3.")
+                print("❌ Введите число 1, 2, 3 или 4.")
             except KeyboardInterrupt:
                 print("\n❌ Отменено пользователем.")
                 sys.exit(1)
@@ -756,6 +764,122 @@ class TradesAnalyzer:
         
         return results
     
+    def analyze_all_sources(self) -> Dict[str, Any]:
+        """
+        Анализирует сделки из всех доступных источников
+        
+        Returns:
+            Сводные результаты по всем источникам
+        """
+        all_results = {}
+        
+        # Определяем все источники
+        desktop_path = os.path.join(os.environ.get('USERPROFILE', ''), "OneDrive", "Рабочий стол")
+        kas_path = r"C:\Sandbox\glaze\Kas\user\current\OneDrive\Рабочий стол"
+        literuslan_path = r"C:\Sandbox\glaze\LiteRuslan\user\current\OneDrive\Рабочий стол"
+        
+        sources_to_analyze = [
+            {"name": "Рабочий стол (супруга и дочь)", "path": desktop_path, "tag": "_супруга_и_дочь"},
+            {"name": "Kas (Ваня)", "path": kas_path, "tag": "_Ваня"},
+            {"name": "LiteRuslan", "path": literuslan_path, "tag": "_LiteRuslan"}
+        ]
+        
+        print("\n" + "="*60)
+        print("🔄 АВТОМАТИЧЕСКИЙ АНАЛИЗ ВСЕХ ИСТОЧНИКОВ")
+        print("="*60)
+        
+        for i, source in enumerate(sources_to_analyze, 1):
+            print(f"\n📊 Анализ {i}/3: {source['name']}")
+            print("-" * 40)
+            
+            # Временно меняем директорию для анализа этого источника
+            original_directory = self.trades_directory
+            self.trades_directory = source["path"]
+            
+            try:
+                # Получаем файл для этого источника
+                filepath = self.get_today_trades_file()
+                
+                if filepath and os.path.exists(filepath):
+                    print(f"✅ Найден файл: {os.path.basename(filepath)}")
+                    
+                    # Копируем файл с правильной меткой
+                    copied_filepath = self.copy_file_to_input(filepath)
+                    
+                    # Загружаем и анализируем данные
+                    df = self.load_trades(copied_filepath)
+                    if df is not None:
+                        # Создаем только аналитический Excel (без промежуточных)
+                        parsed_excel_path = self.create_parsed_excel(df, copied_filepath)
+                        results = self.calculate_averages(df)
+                        excel_path = self.create_and_open_excel(df, copied_filepath)
+                        
+                        # Сохраняем результаты
+                        results['source_name'] = source['name']
+                        results['source_file'] = filepath
+                        results['copied_file'] = copied_filepath
+                        results['excel_file'] = excel_path
+                        
+                        all_results[source['name']] = results
+                        
+                        print(f"✅ Анализ завершен: {len(df)} сделок")
+                        if 'total_turnover' in results:
+                            print(f"💰 Оборот: {results['total_turnover']:,.2f} ₽")
+                    else:
+                        print("❌ Ошибка загрузки данных")
+                        all_results[source['name']] = {"error": "Ошибка загрузки данных"}
+                else:
+                    print("❌ Файл не найден")
+                    all_results[source['name']] = {"error": "Файл сделок не найден"}
+                    
+            except Exception as e:
+                print(f"❌ Ошибка: {e}")
+                all_results[source['name']] = {"error": str(e)}
+            finally:
+                # Восстанавливаем оригинальную директорию
+                self.trades_directory = original_directory
+        
+        # Выводим сводку по всем источникам
+        self.print_all_sources_summary(all_results)
+        
+        return all_results
+    
+    def print_all_sources_summary(self, all_results: Dict[str, Any]):
+        """
+        Выводит сводку по всем источникам
+        
+        Args:
+            all_results: Результаты анализа всех источников
+        """
+        print("\n" + "="*60)
+        print("📊 СВОДКА ПО ВСЕМ ИСТОЧНИКАМ")
+        print("="*60)
+        
+        total_trades = 0
+        total_turnover = 0
+        
+        for source_name, results in all_results.items():
+            if 'error' not in results:
+                trades = results.get('total_trades', 0)
+                turnover = results.get('total_turnover', 0)
+                vwap = results.get('vwap_price', 0)
+                
+                total_trades += trades
+                total_turnover += turnover
+                
+                print(f"\n🔸 {source_name}:")
+                print(f"   Сделок: {trades}")
+                print(f"   VWAP: {vwap:,.4f} ₽")
+                print(f"   Оборот: {turnover:,.2f} ₽")
+            else:
+                print(f"\n❌ {source_name}: {results['error']}")
+        
+        print(f"\n" + "="*40)
+        print(f"📈 ИТОГО ПО ВСЕМ ИСТОЧНИКАМ:")
+        print(f"   Общее количество сделок: {total_trades}")
+        print(f"   Общий оборот: {total_turnover:,.2f} ₽")
+        print("="*60)
+    
     def analyze_today(self) -> Dict[str, Any]:
         """
         Анализирует сделки за сегодня
@@ -895,8 +1019,14 @@ class TradesAnalyzer:
 def main():
     """Основная функция"""
     analyzer = TradesAnalyzer()
-    results = analyzer.analyze_today()
-    analyzer.print_results(results)
+    
+    if analyzer.auto_all_mode:
+        # Анализируем все источники
+        all_results = analyzer.analyze_all_sources()
+    else:
+        # Анализируем один источник
+        results = analyzer.analyze_today()
+        analyzer.print_results(results)
 
 
 if __name__ == "__main__":
