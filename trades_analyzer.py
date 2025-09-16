@@ -147,6 +147,29 @@ class TradesAnalyzer:
                     clean_df = df[['Ticker', 'Price', 'Direction', 'Amount', 'DateCreate']].dropna(subset=['Price', 'Amount'])
                     if len(clean_df) > 0:
                         clean_df.to_excel(writer, sheet_name='Валидные_для_VWAP', index=False)
+                
+                # Анализ по тикерам (если есть результаты анализа)
+                if hasattr(self, '_last_ticker_analysis') and self._last_ticker_analysis:
+                    ticker_summary = []
+                    for ticker, data in self._last_ticker_analysis.items():
+                        row = {
+                            'Тикер': ticker,
+                            'Всего сделок': data.get('total_trades', 0),
+                            'Buy сделок': data.get('buy_trades', 0),
+                            'Sell сделок': data.get('sell_trades', 0),
+                            'Средняя цена': data.get('avg_price', 'N/A'),
+                            'Мин цена': data.get('min_price', 'N/A'),
+                            'Макс цена': data.get('max_price', 'N/A'),
+                            'VWAP': data.get('vwap', 'N/A'),
+                            'Средний объем': data.get('avg_amount', 'N/A'),
+                            'Общий объем': data.get('total_amount', 'N/A'),
+                            'Оборот': data.get('total_turnover', 'N/A')
+                        }
+                        ticker_summary.append(row)
+                    
+                    if ticker_summary:
+                        ticker_df = pd.DataFrame(ticker_summary)
+                        ticker_df.to_excel(writer, sheet_name='Анализ_по_тикерам', index=False)
             
             logger.info(f"Excel файл создан: {excel_filename}")
             
@@ -388,10 +411,97 @@ class TradesAnalyzer:
             
             logger.info(f"Всего сделок: {results['total_trades']}")
             
+            # Анализ по тикерам
+            if 'Ticker' in df.columns:
+                ticker_analysis = self.analyze_by_ticker(df)
+                results['ticker_analysis'] = ticker_analysis
+                # Сохраняем для использования в Excel
+                self._last_ticker_analysis = ticker_analysis
+            
         except Exception as e:
             logger.error(f"Ошибка при вычислении средних: {e}")
         
         return results
+    
+    def analyze_by_ticker(self, df: pd.DataFrame) -> Dict[str, Dict[str, Any]]:
+        """
+        Анализирует сделки по каждому тикеру отдельно
+        
+        Args:
+            df: DataFrame с данными о сделках
+            
+        Returns:
+            Словарь с анализом по каждому тикеру
+        """
+        ticker_results = {}
+        
+        try:
+            logger.info("=== АНАЛИЗ ПО ТИКЕРАМ ===")
+            
+            # Группируем по тикерам
+            for ticker in df['Ticker'].unique():
+                ticker_df = df[df['Ticker'] == ticker].copy()
+                ticker_data = {}
+                
+                logger.info(f"Анализ тикера: {ticker}")
+                
+                # Основная статистика
+                ticker_data['total_trades'] = len(ticker_df)
+                ticker_data['ticker'] = ticker
+                
+                # Анализ направлений сделок
+                if 'Direction' in ticker_df.columns:
+                    buy_trades = len(ticker_df[ticker_df['Direction'] == 'Buy'])
+                    sell_trades = len(ticker_df[ticker_df['Direction'] == 'Sell'])
+                    ticker_data['buy_trades'] = buy_trades
+                    ticker_data['sell_trades'] = sell_trades
+                
+                # Анализ цен
+                if 'Price' in ticker_df.columns:
+                    prices = ticker_df['Price'].dropna()
+                    if len(prices) > 0:
+                        ticker_data['avg_price'] = prices.mean()
+                        ticker_data['min_price'] = prices.min()
+                        ticker_data['max_price'] = prices.max()
+                        ticker_data['price_std'] = prices.std()
+                        ticker_data['valid_price_trades'] = len(prices)
+                        
+                        logger.info(f"  Средняя цена: {ticker_data['avg_price']:.4f}")
+                        logger.info(f"  Диапазон цен: {ticker_data['min_price']:.4f} - {ticker_data['max_price']:.4f}")
+                
+                # Анализ объемов
+                if 'Amount' in ticker_df.columns:
+                    amounts = ticker_df['Amount'].dropna()
+                    if len(amounts) > 0:
+                        ticker_data['avg_amount'] = amounts.mean()
+                        ticker_data['total_amount'] = amounts.sum()
+                        ticker_data['min_amount'] = amounts.min()
+                        ticker_data['max_amount'] = amounts.max()
+                        
+                        logger.info(f"  Средний объем: {ticker_data['avg_amount']:.4f}")
+                        logger.info(f"  Общий объем: {ticker_data['total_amount']:.4f}")
+                
+                # VWAP для тикера
+                if 'Price' in ticker_df.columns and 'Amount' in ticker_df.columns:
+                    clean_ticker_df = ticker_df[['Price', 'Amount']].dropna()
+                    if len(clean_ticker_df) > 0:
+                        total_volume = clean_ticker_df['Amount'].sum()
+                        if total_volume > 0:
+                            vwap = (clean_ticker_df['Price'] * clean_ticker_df['Amount']).sum() / total_volume
+                            ticker_data['vwap'] = vwap
+                            ticker_data['total_turnover'] = (clean_ticker_df['Price'] * clean_ticker_df['Amount']).sum()
+                            
+                            logger.info(f"  VWAP: {vwap:.4f}")
+                            logger.info(f"  Оборот: {ticker_data['total_turnover']:.2f}")
+                
+                logger.info(f"  Всего сделок: {ticker_data['total_trades']} (Buy: {ticker_data.get('buy_trades', 0)}, Sell: {ticker_data.get('sell_trades', 0)})")
+                
+                ticker_results[ticker] = ticker_data
+                
+        except Exception as e:
+            logger.error(f"Ошибка при анализе по тикерам: {e}")
+        
+        return ticker_results
     
     def analyze_today(self) -> Dict[str, Any]:
         """
@@ -530,6 +640,28 @@ class TradesAnalyzer:
             
             if 'weighted_avg_amount' in results:
                 print(f"Средневзвешенный объем: {results['weighted_avg_amount']:.4f}")
+        
+        # Анализ по тикерам
+        if 'ticker_analysis' in results and results['ticker_analysis']:
+            print("\n📊 АНАЛИЗ ПО ТИКЕРАМ:")
+            print("="*60)
+            
+            for ticker, data in results['ticker_analysis'].items():
+                print(f"\n🔸 {ticker}:")
+                print(f"   Сделок: {data.get('total_trades', 0)} (Buy: {data.get('buy_trades', 0)}, Sell: {data.get('sell_trades', 0)})")
+                
+                if 'avg_price' in data:
+                    print(f"   Средняя цена: {data['avg_price']:,.4f} ₽")
+                if 'min_price' in data and 'max_price' in data:
+                    print(f"   Диапазон цен: {data['min_price']:,.4f} - {data['max_price']:,.4f} ₽")
+                if 'vwap' in data:
+                    print(f"   VWAP: {data['vwap']:,.4f} ₽")
+                if 'avg_amount' in data:
+                    print(f"   Средний объем: {data['avg_amount']:.2f}")
+                if 'total_amount' in data:
+                    print(f"   Общий объем: {data['total_amount']:.0f}")
+                if 'total_turnover' in data:
+                    print(f"   Оборот: {data['total_turnover']:,.2f} ₽")
         
         if 'analysis_date' in results:
             print(f"\n⏰ Дата анализа: {results['analysis_date']}")
