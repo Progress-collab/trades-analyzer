@@ -173,17 +173,14 @@ class TradesAnalyzer:
             elif "Desktop" in source_filepath:
                 source_tag = "_супруга_и_дочь"
             
-            # Добавляем метку к имени файла
+            # Добавляем дату, время и метку к имени файла
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             if source_tag:
-                filename = f"{name}{source_tag}{ext}"
+                filename = f"{name}{source_tag}_{timestamp}{ext}"
+            else:
+                filename = f"{name}_{timestamp}{ext}"
             
             destination = os.path.join(self.input_directory, filename)
-            
-            # Если файл уже существует, добавляем timestamp
-            if os.path.exists(destination):
-                timestamp = datetime.now().strftime("%H%M%S")
-                filename = f"{name}{source_tag}_{timestamp}{ext}"
-                destination = os.path.join(self.input_directory, filename)
             
             shutil.copy2(source_filepath, destination)
             logger.info(f"Файл скопирован в input: {filename}")
@@ -205,9 +202,10 @@ class TradesAnalyzer:
             Путь к созданному Excel файлу
         """
         try:
-            # Формируем имя Excel файла
+            # Формируем имя Excel файла с датой и временем
             base_name = os.path.splitext(os.path.basename(source_filepath))[0]
-            excel_filename = f"{base_name}_analyzed.xlsx"
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            excel_filename = f"{base_name}_analyzed_{timestamp}.xlsx"
             excel_path = os.path.join(self.input_directory, excel_filename)
             
             # Создаем Excel файл с несколькими листами
@@ -391,9 +389,10 @@ class TradesAnalyzer:
             Путь к созданному Excel файлу
         """
         try:
-            # Формируем имя Excel файла
+            # Формируем имя Excel файла с датой и временем
             base_name = os.path.splitext(os.path.basename(source_filepath))[0]
-            excel_filename = f"{base_name}_parsed.xlsx"
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            excel_filename = f"{base_name}_parsed_{timestamp}.xlsx"
             excel_path = os.path.join(self.input_directory, excel_filename)
             
             # Создаем простой Excel файл только с данными
