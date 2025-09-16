@@ -146,7 +146,7 @@ class TradesAnalyzer:
     
     def copy_file_to_input(self, source_filepath: str) -> str:
         """
-        Копирует файл в папку input
+        Копирует файл в папку input с добавлением метки источника
         
         Args:
             source_filepath: Путь к исходному файлу
@@ -156,13 +156,27 @@ class TradesAnalyzer:
         """
         try:
             filename = os.path.basename(source_filepath)
+            name, ext = os.path.splitext(filename)
+            
+            # Определяем метку источника
+            source_tag = ""
+            if "Sandbox" in source_filepath and "Kas" in source_filepath:
+                source_tag = "_Ваня"
+            elif "OneDrive" in source_filepath and "Рабочий стол" in source_filepath:
+                source_tag = "_супруга_и_дочь"
+            elif "Desktop" in source_filepath:
+                source_tag = "_супруга_и_дочь"
+            
+            # Добавляем метку к имени файла
+            if source_tag:
+                filename = f"{name}{source_tag}{ext}"
+            
             destination = os.path.join(self.input_directory, filename)
             
             # Если файл уже существует, добавляем timestamp
             if os.path.exists(destination):
-                name, ext = os.path.splitext(filename)
                 timestamp = datetime.now().strftime("%H%M%S")
-                filename = f"{name}_{timestamp}{ext}"
+                filename = f"{name}{source_tag}_{timestamp}{ext}"
                 destination = os.path.join(self.input_directory, filename)
             
             shutil.copy2(source_filepath, destination)
