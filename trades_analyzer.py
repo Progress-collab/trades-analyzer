@@ -142,11 +142,6 @@ class TradesAnalyzer:
                 stats_df = pd.DataFrame(stats_data)
                 stats_df.to_excel(writer, sheet_name='Статистика', index=False)
                 
-                # Валидные данные для VWAP
-                if 'Price' in df.columns and 'Amount' in df.columns:
-                    clean_df = df[['Ticker', 'Price', 'Direction', 'Amount', 'DateCreate']].dropna(subset=['Price', 'Amount'])
-                    if len(clean_df) > 0:
-                        clean_df.to_excel(writer, sheet_name='Валидные_для_VWAP', index=False)
                 
                 # Анализ по тикерам (если есть результаты анализа)
                 if hasattr(self, '_last_ticker_analysis') and self._last_ticker_analysis:
