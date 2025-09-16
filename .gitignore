@@ -118,3 +118,8 @@ Thumbs.db
 *.csv
 !example_*.csv
 config.ini
+
+# Input files (keep folder but ignore contents)
+input/*.csv
+input/*.txt
+input/*.log

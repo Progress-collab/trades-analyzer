@@ -7,6 +7,7 @@
 
 import pandas as pd
 import os
+import shutil
 from datetime import datetime
 from typing import Dict, Any, Optional
 import logging
@@ -34,6 +35,12 @@ class TradesAnalyzer:
             trades_directory: Путь к директории с файлами сделок
         """
         self.trades_directory = trades_directory
+        self.input_directory = os.path.join(os.getcwd(), "input")
+        
+        # Создаем папку input если её нет
+        if not os.path.exists(self.input_directory):
+            os.makedirs(self.input_directory)
+            logger.info(f"Создана папка для входных файлов: {self.input_directory}")
         
     def get_today_trades_file(self) -> Optional[str]:
         """
@@ -52,6 +59,35 @@ class TradesAnalyzer:
         else:
             logger.warning(f"Файл сделок не найден: {filepath}")
             return None
+    
+    def copy_file_to_input(self, source_filepath: str) -> str:
+        """
+        Копирует файл в папку input
+        
+        Args:
+            source_filepath: Путь к исходному файлу
+            
+        Returns:
+            Путь к скопированному файлу
+        """
+        try:
+            filename = os.path.basename(source_filepath)
+            destination = os.path.join(self.input_directory, filename)
+            
+            # Если файл уже существует, добавляем timestamp
+            if os.path.exists(destination):
+                name, ext = os.path.splitext(filename)
+                timestamp = datetime.now().strftime("%H%M%S")
+                filename = f"{name}_{timestamp}{ext}"
+                destination = os.path.join(self.input_directory, filename)
+            
+            shutil.copy2(source_filepath, destination)
+            logger.info(f"Файл скопирован в input: {filename}")
+            return destination
+            
+        except Exception as e:
+            logger.error(f"Ошибка при копировании файла: {e}")
+            return source_filepath  # Возвращаем оригинальный путь если копирование не удалось
     
     def load_trades(self, filepath: str) -> Optional[pd.DataFrame]:
         """
@@ -128,12 +164,52 @@ class TradesAnalyzer:
         results = {}
         
         try:
+            # Диагностика данных
+            logger.info("=== ДИАГНОСТИКА ДАННЫХ ===")
+            logger.info(f"Общее количество строк: {len(df)}")
+            
+            for col in df.columns:
+                logger.info(f"Столбец '{col}':")
+                logger.info(f"  - Тип данных: {df[col].dtype}")
+                logger.info(f"  - Пустых значений: {df[col].isna().sum()}")
+                logger.info(f"  - Уникальных значений: {df[col].nunique()}")
+                
+                # Показываем первые несколько значений
+                sample_values = df[col].dropna().head(5).tolist()
+                logger.info(f"  - Примеры значений: {sample_values}")
+                
+                # Для численных столбцов показываем статистику
+                if col in ['Price', 'Amount']:
+                    try:
+                        # Пытаемся преобразовать в числа
+                        numeric_col = pd.to_numeric(df[col], errors='coerce')
+                        valid_count = numeric_col.notna().sum()
+                        logger.info(f"  - Валидных числовых значений: {valid_count}")
+                        
+                        if valid_count > 0:
+                            logger.info(f"  - Мин: {numeric_col.min():.4f}")
+                            logger.info(f"  - Макс: {numeric_col.max():.4f}")
+                            logger.info(f"  - Среднее: {numeric_col.mean():.4f}")
+                            logger.info(f"  - Сумма: {numeric_col.sum():.4f}")
+                    except Exception as e:
+                        logger.warning(f"  - Ошибка анализа как числового столбца: {e}")
+            
             # Определяем численные столбцы
             numeric_columns = df.select_dtypes(include=['int64', 'float64']).columns
             
             if len(numeric_columns) == 0:
                 logger.warning("Не найдено численных столбцов для расчета средних")
-                return results
+                # Попробуем принудительно преобразовать Price и Amount
+                if 'Price' in df.columns and 'Amount' in df.columns:
+                    logger.info("Пытаемся принудительно преобразовать Price и Amount в числа")
+                    df_copy = df.copy()
+                    df_copy['Price'] = pd.to_numeric(df_copy['Price'], errors='coerce')
+                    df_copy['Amount'] = pd.to_numeric(df_copy['Amount'], errors='coerce')
+                    
+                    # Обновляем список численных столбцов
+                    numeric_columns = df_copy.select_dtypes(include=['int64', 'float64']).columns
+                    df = df_copy
+                    logger.info(f"После преобразования численных столбцов: {list(numeric_columns)}")
             
             # Вычисляем простые средние для всех численных столбцов
             for col in numeric_columns:
@@ -147,7 +223,14 @@ class TradesAnalyzer:
                 # Убираем строки с NaN значениями
                 clean_df = df[['Price', 'Amount']].dropna()
                 
+                logger.info(f"Строк с валидными Price и Amount: {len(clean_df)} из {len(df)}")
+                
                 if len(clean_df) > 0:
+                    # Показываем несколько примеров данных
+                    logger.info("Примеры валидных данных:")
+                    for i, (_, row) in enumerate(clean_df.head(5).iterrows()):
+                        logger.info(f"  Строка {i+1}: Price={row['Price']:.4f}, Amount={row['Amount']:.4f}")
+                    
                     # VWAP = Σ(Price × Amount) / Σ(Amount)
                     total_volume = clean_df['Amount'].sum()
                     if total_volume > 0:
@@ -165,9 +248,11 @@ class TradesAnalyzer:
                     # Дополнительная статистика
                     results['total_volume'] = total_volume
                     results['total_turnover'] = (clean_df['Price'] * clean_df['Amount']).sum()
+                    results['valid_trades_count'] = len(clean_df)
                     
                     logger.info(f"Общий объем: {total_volume:.4f}")
                     logger.info(f"Общий оборот: {results['total_turnover']:.2f}")
+                    logger.info(f"Валидных сделок: {len(clean_df)}")
             
             # Общая статистика
             results['total_trades'] = len(df)
@@ -190,18 +275,22 @@ class TradesAnalyzer:
         logger.info("Начинаем анализ сделок за сегодня")
         
         # Получаем путь к файлу
-        filepath = self.get_today_trades_file()
-        if not filepath:
+        original_filepath = self.get_today_trades_file()
+        if not original_filepath:
             return {"error": "Файл сделок за сегодня не найден"}
         
-        # Загружаем данные
-        df = self.load_trades(filepath)
+        # Копируем файл в папку input
+        copied_filepath = self.copy_file_to_input(original_filepath)
+        
+        # Загружаем данные из скопированного файла
+        df = self.load_trades(copied_filepath)
         if df is None:
             return {"error": "Не удалось загрузить данные из файла"}
         
         # Вычисляем средние
         results = self.calculate_averages(df)
-        results['source_file'] = filepath
+        results['source_file'] = original_filepath
+        results['copied_file'] = copied_filepath
         
         return results
     
@@ -221,10 +310,16 @@ class TradesAnalyzer:
         print("="*60)
         
         if 'source_file' in results:
-            print(f"📁 Файл: {os.path.basename(results['source_file'])}")
+            print(f"📁 Исходный файл: {os.path.basename(results['source_file'])}")
+        
+        if 'copied_file' in results:
+            print(f"📂 Скопирован в: {os.path.relpath(results['copied_file'])}")
         
         if 'total_trades' in results:
             print(f"📈 Всего сделок: {results['total_trades']}")
+        
+        if 'valid_trades_count' in results:
+            print(f"✅ Валидных сделок: {results['valid_trades_count']}")
         
         # Общая статистика
         if 'total_volume' in results:
