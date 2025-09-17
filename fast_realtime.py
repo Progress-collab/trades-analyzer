@@ -186,11 +186,30 @@ class FastRealTimeMonitor:
         time.sleep(2)
         
         self.running = True
+        request_times = []  # Для отслеживания времени запросов
         
         try:
             while self.running:
+                start_time = time.time()
                 self.update_display()
-                time.sleep(self.update_interval)
+                request_time = time.time() - start_time
+                
+                # Отслеживаем время запросов
+                request_times.append(request_time)
+                if len(request_times) > 5:
+                    request_times.pop(0)  # Храним только последние 5
+                
+                avg_request_time = sum(request_times) / len(request_times)
+                
+                # Проверяем, не слишком ли маленький интервал
+                if avg_request_time >= self.update_interval * 0.8:
+                    recommended_interval = avg_request_time + 1.0
+                    print(f"⚠️  ВНИМАНИЕ: Время запроса {avg_request_time:.1f}с близко к интервалу {self.update_interval}с")
+                    print(f"💡 Рекомендуется интервал {recommended_interval:.1f}с или больше")
+                
+                # Рассчитываем фактический интервал ожидания
+                actual_wait = max(0, self.update_interval - request_time)
+                time.sleep(actual_wait)
                 
         except KeyboardInterrupt:
             print("\n\n🛑 Мониторинг остановлен пользователем")
@@ -208,15 +227,22 @@ def main():
     
     # Выбираем интервал обновления
     print("📊 Доступные интервалы:")
-    print("  1. 0.5 секунды (быстро)")
-    print("  2. 1.0 секунда (оптимально)")  
-    print("  3. 2.0 секунды (экономично)")
+    print("  1. 3.0 секунды (быстро, но безопасно)")
+    print("  2. 5.0 секунд (оптимально)")  
+    print("  3. 10.0 секунд (экономично)")
+    print("  4. Пользовательский интервал")
     
     try:
-        choice = input("⚡ Выберите интервал (1-3, по умолчанию 1): ").strip() or "1"
+        choice = input("⚡ Выберите интервал (1-4, по умолчанию 1): ").strip() or "1"
         
-        intervals = {"1": 0.5, "2": 1.0, "3": 2.0}
-        interval = intervals.get(choice, 0.5)
+        if choice == "4":
+            interval = float(input("🔧 Введите интервал в секундах (минимум 3.0): ") or "3.0")
+            if interval < 3.0:
+                print("⚠️  Минимальный интервал установлен: 3.0 секунды")
+                interval = 3.0
+        else:
+            intervals = {"1": 3.0, "2": 5.0, "3": 10.0}
+            interval = intervals.get(choice, 3.0)
         
         print(f"✅ Выбран интервал: {interval} секунд")
         
