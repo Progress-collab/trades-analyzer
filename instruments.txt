@@ -8,13 +8,16 @@ GAZP
 LKOH
 
 # Фьючерсы на палладий
+PDU5
 PDZ5
 PDH6
 
 # Фьючерсы на платину
+PTU5
 PTZ5
 PTH6
 
 # Фьючерсы на кофе
+KCX5
 CFZ5
 CFH6
