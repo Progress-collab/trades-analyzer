@@ -1,0 +1,13 @@
+# Шаблон файла с переменными окружения
+# Переименуйте этот файл в .env и заполните своими данными
+
+# API токен Alor
+ALOR_API_TOKEN=your_alor_token_here
+
+# Настройки API Alor
+ALOR_API_URL=https://api.alor.ru
+ALOR_PORTFOLIO=your_portfolio_id
+
+# Настройки cTrader FxPro (для будущего использования)
+CTRADER_API_TOKEN=your_ctrader_token_here
+CTRADER_API_URL=https://api.ctrader.com

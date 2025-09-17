@@ -107,31 +107,61 @@ class AlorAPI:
         Получает котировку по инструменту
         
         Args:
-            symbol: Символ инструмента (например, PLD-9.25)
+            symbol: Символ инструмента (например, SBER)
             exchange: Биржа (по умолчанию MOEX)
             
         Returns:
             Словарь с данными котировки или None при ошибке
         """
         try:
-            url = f"{self.api_url}/md/v2/{exchange}/{symbol}/quotes"
+            # Попробуем разные варианты endpoint (рабочий первым)
+            endpoints_to_try = [
+                f"{self.api_url}/md/v2/securities/{exchange}:{symbol}/quotes",
+                f"{self.api_url}/md/v2/{exchange}/{symbol}/quotes",
+                f"{self.api_url}/md/v2/{exchange}/{symbol}",
+                f"{self.api_url}/md/securities/{exchange}:{symbol}/quotes"
+            ]
             
-            response = self.session.get(url, timeout=10)
-            response.raise_for_status()
+            data = None
+            successful_url = None
             
-            data = response.json()
+            for url in endpoints_to_try:
+                try:
+                    logger.debug(f"Пробую endpoint: {url}")
+                    response = self.session.get(url, timeout=10)
+                    response.raise_for_status()
+                    data = response.json()
+                    successful_url = url
+                    logger.debug(f"Успешный endpoint: {url}")
+                    break
+                except requests.exceptions.RequestException as e:
+                    logger.debug(f"Endpoint {url} не работает: {e}")
+                    continue
             
-            # Извлекаем нужные данные
+            if data is None:
+                logger.error(f"Все endpoints не работают для {symbol}")
+                return None
+            
+            # API может возвращать список или словарь
+            if isinstance(data, list):
+                if len(data) == 0:
+                    logger.error(f"Пустой ответ для {symbol}")
+                    return None
+                data = data[0]  # Берем первый элемент из списка
+            
+            logger.debug(f"Данные для {symbol}: {data}")
+            
+            # Извлекаем нужные данные с различными вариантами названий полей
             quote_data = {
                 'symbol': symbol,
                 'exchange': exchange,
-                'bid': data.get('bid'),
-                'ask': data.get('ask'),
-                'last_price': data.get('last_price'),
+                'bid': data.get('bid') or data.get('bestBid') or data.get('b'),
+                'ask': data.get('ask') or data.get('bestAsk') or data.get('a'), 
+                'last_price': data.get('last_price') or data.get('lastPrice') or data.get('last') or data.get('lp'),
                 'timestamp': datetime.now().isoformat(),
-                'volume': data.get('volume'),
-                'change': data.get('change'),
-                'change_percent': data.get('change_percent')
+                'volume': data.get('volume') or data.get('vol'),
+                'change': data.get('change') or data.get('priceChange'),
+                'change_percent': data.get('change_percent') or data.get('priceChangePercent') or data.get('changePercent')
             }
             
             logger.debug(f"Получена котировка {symbol}: bid={quote_data['bid']}, ask={quote_data['ask']}, last={quote_data['last_price']}")
@@ -213,7 +243,7 @@ def main():
     """Основная функция для тестирования модуля"""
     # Настройка логирования
     logging.basicConfig(
-        level=logging.INFO,
+        level=logging.INFO,  # Возвращаем обычный уровень
         format='%(asctime)s - %(levelname)s - %(message)s'
     )
     

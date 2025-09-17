@@ -121,6 +121,7 @@ config.ini
 
 # Security - never commit tokens!
 .env
+!.env.example
 *.key
 *.token
 
