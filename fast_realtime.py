@@ -47,24 +47,24 @@ class FastRealTimeMonitor:
             Строка с индикатором изменения
         """
         if current is None:
-            return "    N/A "
+            return "     N/A "
         
         if previous is None:
-            return f"{current:>{8}.{precision}f}"
+            return f" {current:>{8}.{precision}f}"
         
         if current > previous:
-            return f"📈{current:>{7}.{precision}f}"  # Рост - зеленая стрелка
+            return f"↑{current:>{8}.{precision}f}"  # Рост - стрелка вверх
         elif current < previous:
-            return f"📉{current:>{7}.{precision}f}"  # Падение - красная стрелка
+            return f"↓{current:>{8}.{precision}f}"  # Падение - стрелка вниз
         else:
-            return f"➡️{current:>{7}.{precision}f}"   # Без изменений
+            return f"={current:>{8}.{precision}f}"   # Без изменений - равно
     
     def print_header(self):
         """Выводит заголовок таблицы"""
         print("=" * 110)
         print("⚡ БЫСТРЫЙ REAL-TIME МОНИТОРИНГ ALOR (HTTP API)")
         print("=" * 110)
-        print(f"{'Инстр.':<6} {'Bid':<12} {'Ask':<12} {'Last':<12} {'Spread':<8} {'Change%':<9} {'Vol.':<8} {'Время сделки':<15}")
+        print(f"{'Инстр.':<6} {'Bid':<12} {'Ask':<12} {'Last':<12} {'Spread':<8} {'Change%':<9} {'Vol.':<8} {'Обновлен':<15}")
         print("-" * 110)
     
     def print_quote_row(self, symbol, data):
@@ -85,7 +85,8 @@ class FastRealTimeMonitor:
         last = data.get('last_price')
         change_pct = data.get('change_percent', 0)
         volume = data.get('volume', 0)
-        trade_time = data.get('last_trade_time', 'N/A')
+        orderbook_time = data.get('orderbook_time', 'N/A')
+        
         
         # Получаем предыдущие данные для сравнения
         prev_data = self.previous_data.get(symbol, {})
@@ -107,11 +108,11 @@ class FastRealTimeMonitor:
         
         # Форматируем изменение в процентах
         if change_pct > 0:
-            change_str = f"📈{change_pct:+5.2f}%"
+            change_str = f"↑{change_pct:+5.2f}%"
         elif change_pct < 0:
-            change_str = f"📉{change_pct:+5.2f}%"
+            change_str = f"↓{change_pct:+5.2f}%"
         else:
-            change_str = f"➡️{change_pct:+5.2f}%"
+            change_str = f"={change_pct:+5.2f}%"
         
         # Форматируем объем
         if isinstance(volume, (int, float)):
@@ -122,11 +123,17 @@ class FastRealTimeMonitor:
         else:
             vol_str = "N/A"
         
-        # Форматируем время (только время без даты)
-        if trade_time != 'N/A' and 'T' in str(trade_time):
-            time_only = str(trade_time).split('T')[1][:8]  # HH:MM:SS
+        # Форматируем время обновления стакана от биржи
+        if orderbook_time and orderbook_time != 'N/A':
+            if 'T' in str(orderbook_time):
+                # Извлекаем время с миллисекундами и обрезаем до секунд
+                time_part = str(orderbook_time).split('T')[1]
+                time_only = time_part[:8]  # HH:MM:SS (без миллисекунд)
+            else:
+                time_only = str(orderbook_time)[:8]
         else:
-            time_only = str(trade_time)[:15]
+            # Если нет времени стакана от биржи, показываем что данных нет
+            time_only = "NO_DATA"
         
         print(f"{symbol:<6} {bid_str:<12} {ask_str:<12} {last_str:<12} {spread_str:<8} {change_str:<9} {vol_str:<8} {time_only:<15}")
     
@@ -191,8 +198,33 @@ class FastRealTimeMonitor:
         try:
             while self.running:
                 start_time = time.time()
-                self.update_display()
+                
+                # Получаем данные без вывода на экран
+                instruments = self.alor.load_instruments_list()
+                if not instruments:
+                    print("❌ Список инструментов пуст")
+                    break
+                
+                quotes = self.alor.get_multiple_quotes(instruments)
                 request_time = time.time() - start_time
+                
+                # Выводим данные на экран
+                self.clear_screen()
+                self.print_header()
+                
+                for symbol in instruments:
+                    data = quotes.get(symbol, {"error": "Нет данных"})
+                    self.print_quote_row(symbol, data)
+                
+                self.print_footer()
+                print(f"📊 Время запроса: {request_time:.3f}с | 🚀 Следующее обновление через {self.update_interval}с")
+                
+                # Сохраняем данные для сравнения
+                self.previous_data = {
+                    symbol: data for symbol, data in quotes.items() 
+                    if 'error' not in data
+                }
+                self.update_count += 1
                 
                 # Отслеживаем время запросов
                 request_times.append(request_time)
@@ -227,22 +259,23 @@ def main():
     
     # Выбираем интервал обновления
     print("📊 Доступные интервалы:")
-    print("  1. 3.0 секунды (быстро, но безопасно)")
-    print("  2. 5.0 секунд (оптимально)")  
-    print("  3. 10.0 секунд (экономично)")
-    print("  4. Пользовательский интервал")
+    print("  1. 3.0 секунды (быстро)")
+    print("  2. 5.0 секунд (оптимально, по умолчанию)")  
+    print("  3. 7.0 секунд (комфортно)")
+    print("  4. 10.0 секунд (экономично)")
+    print("  5. Пользовательский интервал")
     
     try:
-        choice = input("⚡ Выберите интервал (1-4, по умолчанию 1): ").strip() or "1"
+        choice = input("⚡ Выберите интервал (1-5, по умолчанию 2): ").strip() or "2"
         
-        if choice == "4":
-            interval = float(input("🔧 Введите интервал в секундах (минимум 3.0): ") or "3.0")
+        if choice == "5":
+            interval = float(input("🔧 Введите интервал в секундах (минимум 3.0): ") or "5.0")
             if interval < 3.0:
                 print("⚠️  Минимальный интервал установлен: 3.0 секунды")
                 interval = 3.0
         else:
-            intervals = {"1": 3.0, "2": 5.0, "3": 10.0}
-            interval = intervals.get(choice, 3.0)
+            intervals = {"1": 3.0, "2": 5.0, "3": 7.0, "4": 10.0}
+            interval = intervals.get(choice, 5.0)
         
         print(f"✅ Выбран интервал: {interval} секунд")
         
