@@ -155,6 +155,21 @@ class AlorAPI:
             prev_close = data.get('prev_close_price')
             last_price = data.get('last_price')
             
+            # Извлекаем временные метки от биржи (реальное время котировок)
+            last_price_timestamp = data.get('last_price_timestamp')  # Unix timestamp последней сделки
+            orderbook_timestamp = data.get('ob_ms_timestamp')  # Timestamp стакана (bid/ask) в миллисекундах
+            
+            # Конвертируем timestamps в читаемый формат
+            last_trade_time = None
+            orderbook_time = None
+            
+            if last_price_timestamp:
+                last_trade_time = datetime.fromtimestamp(last_price_timestamp).isoformat()
+            
+            if orderbook_timestamp:
+                # ob_ms_timestamp в миллисекундах
+                orderbook_time = datetime.fromtimestamp(orderbook_timestamp / 1000).isoformat()
+            
             # Извлекаем все полезные данные
             quote_data = {
                 'symbol': symbol,
@@ -165,7 +180,10 @@ class AlorAPI:
                 'prev_close_price': prev_close,
                 'change': data.get('change') or data.get('priceChange'),
                 'change_percent': data.get('change_percent') or data.get('priceChangePercent') or data.get('changePercent'),
-                'timestamp': datetime.now().isoformat(),
+                # Реальные временные метки от биржи
+                'last_trade_time': last_trade_time,  # Время последней сделки
+                'orderbook_time': orderbook_time,    # Время обновления стакана
+                'api_request_time': datetime.now().isoformat(),  # Время запроса к API
                 'volume': data.get('volume') or data.get('vol'),
                 'high_price': data.get('high_price') or data.get('high'),
                 'low_price': data.get('low_price') or data.get('low'),
@@ -259,6 +277,15 @@ class AlorAPI:
                 
                 print(f"   📈 High: {high_price} | 📉 Low: {low_price} | 🔓 Open: {open_price}")
                 print(f"   📦 Volume: {volume} | 🏗️ Open Interest: {open_interest}")
+                
+                # Показываем реальные временные метки от биржи
+                last_trade_time = data.get('last_trade_time', 'N/A')
+                orderbook_time = data.get('orderbook_time', 'N/A')
+                
+                if last_trade_time != 'N/A':
+                    print(f"   🕐 Last Trade: {last_trade_time}")
+                if orderbook_time != 'N/A':
+                    print(f"   🕐 Orderbook: {orderbook_time}")
         
         print("\n⏰ Время обновления:", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         print("="*60)
