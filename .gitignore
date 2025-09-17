@@ -119,6 +119,11 @@ Thumbs.db
 !example_*.csv
 config.ini
 
+# Security - never commit tokens!
+.env
+*.key
+*.token
+
 # Input files (keep folder but ignore contents)
 input/*.csv
 input/*.xlsx
