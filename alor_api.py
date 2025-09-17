@@ -151,17 +151,27 @@ class AlorAPI:
             
             logger.debug(f"Данные для {symbol}: {data}")
             
-            # Извлекаем нужные данные с различными вариантами названий полей
+            # Извлекаем основные поля
+            prev_close = data.get('prev_close_price')
+            last_price = data.get('last_price')
+            
+            # Извлекаем все полезные данные
             quote_data = {
                 'symbol': symbol,
                 'exchange': exchange,
                 'bid': data.get('bid') or data.get('bestBid') or data.get('b'),
                 'ask': data.get('ask') or data.get('bestAsk') or data.get('a'), 
                 'last_price': data.get('last_price') or data.get('lastPrice') or data.get('last') or data.get('lp'),
+                'prev_close_price': prev_close,
+                'change': data.get('change') or data.get('priceChange'),
+                'change_percent': data.get('change_percent') or data.get('priceChangePercent') or data.get('changePercent'),
                 'timestamp': datetime.now().isoformat(),
                 'volume': data.get('volume') or data.get('vol'),
-                'change': data.get('change') or data.get('priceChange'),
-                'change_percent': data.get('change_percent') or data.get('priceChangePercent') or data.get('changePercent')
+                'high_price': data.get('high_price') or data.get('high'),
+                'low_price': data.get('low_price') or data.get('low'),
+                'open_price': data.get('open_price') or data.get('open'),
+                'open_interest': data.get('open_interest'),
+                'description': data.get('description')
             }
             
             logger.debug(f"Получена котировка {symbol}: bid={quote_data['bid']}, ask={quote_data['ask']}, last={quote_data['last_price']}")
@@ -229,11 +239,26 @@ class AlorAPI:
                 direction = "📈" if change_pct > 0 else "📉" if change_pct < 0 else "➡️"
                 
                 print(f"\n🔸 {symbol}:")
-                print(f"   Bid: {bid}")
-                print(f"   Ask: {ask}")
-                print(f"   Last: {last}")
+                print(f"   📊 Bid: {bid}")
+                print(f"   📊 Ask: {ask}")
+                print(f"   📊 Last: {last}")
+                
+                prev_close = data.get('prev_close_price', 'N/A')
+                change_abs = data.get('change', 0)
+                
+                print(f"   📊 Prev Close: {prev_close}")
                 if change_pct != 0:
-                    print(f"   Change: {direction} {change_pct:+.2f}%")
+                    print(f"   📊 Change: {direction} {change_abs:+.4f} ({change_pct:+.2f}%)")
+                
+                # Дополнительная полезная информация
+                high_price = data.get('high_price', 'N/A')
+                low_price = data.get('low_price', 'N/A')
+                open_price = data.get('open_price', 'N/A')
+                volume = data.get('volume', 'N/A')
+                open_interest = data.get('open_interest', 'N/A')
+                
+                print(f"   📈 High: {high_price} | 📉 Low: {low_price} | 🔓 Open: {open_price}")
+                print(f"   📦 Volume: {volume} | 🏗️ Open Interest: {open_interest}")
         
         print("\n⏰ Время обновления:", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         print("="*60)
