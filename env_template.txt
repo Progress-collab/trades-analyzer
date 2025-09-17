@@ -1,7 +1,10 @@
 # Шаблон файла с переменными окружения
 # Переименуйте этот файл в .env и заполните своими данными
 
-# API токен Alor
+# Refresh Token Alor (для WebSocket real-time данных)
+ALOR_REFRESH_TOKEN=your_refresh_token_here
+
+# API токен Alor (для HTTP запросов, устаревший)
 ALOR_API_TOKEN=your_alor_token_here
 
 # Настройки API Alor
