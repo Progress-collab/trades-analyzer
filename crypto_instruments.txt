@@ -1,0 +1,28 @@
+# Список криптовалютных инструментов для мониторинга через cTrader FxPro API
+# Формат: один инструмент на строку
+# Комментарии начинаются с #
+#
+# ОСНОВНЫЕ КРИПТОВАЛЮТЫ (из скриншота):
+BITCOIN
+ETHEREUM
+XRP
+LITECOIN
+
+# ДОПОЛНИТЕЛЬНЫЕ ПОПУЛЯРНЫЕ КРИПТОВАЛЮТЫ:
+# Раскомментируйте по необходимости
+#BITCOIN CASH
+#CARDANO
+#POLKADOT
+#CHAINLINK
+#STELLAR
+#DOGECOIN
+#POLYGON
+#AVALANCHE
+#SOLANA
+#BINANCE COIN
+
+# КРИПТОВАЛЮТНЫЕ ПАРЫ (если доступны):
+# BTCUSD
+# ETHUSD
+# XRPUSD
+# LTCUSD

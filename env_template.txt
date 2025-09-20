@@ -11,6 +11,11 @@ ALOR_API_TOKEN=your_alor_token_here
 ALOR_API_URL=https://api.alor.ru
 ALOR_PORTFOLIO=your_portfolio_id
 
-# Настройки cTrader FxPro (для будущего использования)
-CTRADER_API_TOKEN=your_ctrader_token_here
-CTRADER_API_URL=https://api.ctrader.com
+# Настройки cTrader FxPro Open API
+CTRADER_CLIENT_ID=your_client_id_here
+CTRADER_CLIENT_SECRET=your_client_secret_here
+CTRADER_API_URL=https://api.spotware.com
+
+# Дополнительные параметры cTrader (опционально)
+CTRADER_ACCOUNT_ID=your_account_id_here
+CTRADER_ACCESS_TOKEN=your_access_token_here
